@@ -1,0 +1,532 @@
+/* ==============================
+   Головна сторінка (заглушка)
+   ============================== */
+
+.stub {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.stub__topbar {
+  height: 76px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--color-bg);
+}
+
+.stub__search {
+  position: relative;
+  flex: 0 1 320px;
+  max-width: 320px;
+}
+
+.stub__search-icon {
+  position: absolute;
+  left: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.stub__search input {
+  width: 100%;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  padding: 0 52px 0 44px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+
+.stub__search input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.stub__search-clear {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  padding: 0;
+  color: var(--color-text-muted);
+}
+
+.stub__search-clear svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .stub__search-clear:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+  }
+}
+
+.stub__search input:not(:placeholder-shown) ~ .stub__search-clear {
+  display: flex;
+}
+
+.stub__ai-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: 999px;
+  background: #4A3B7C;
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  animation: ai-glow-pulse 2.4s ease-in-out infinite;
+}
+
+.stub__ai-search svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .stub__ai-search:hover {
+    background: #392e63;
+  }
+}
+
+/* Різнокольорове "ІІ-свічення" навколо кнопок ШІ-пошуку — сигналізує,
+   що це саме ШІ-функція, а не звичайна кнопка. Сам колір кнопки (фіолетовий,
+   див. вище) вже трохи натякає на це, тож світіння можна лишити помітним.
+   Working на десктопі й у мобільному розкритому пошуку. */
+@keyframes ai-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 14px 2px rgba(124, 92, 255, 0.45),
+      0 0 26px 6px rgba(255, 111, 216, 0.3), 0 0 36px 10px rgba(52, 209, 232, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 18px 3px rgba(124, 92, 255, 0.6),
+      0 0 32px 8px rgba(255, 111, 216, 0.4), 0 0 44px 14px rgba(52, 209, 232, 0.28);
+  }
+}
+
+.stub__topbar-spacer {
+  flex: 1;
+}
+
+.stub__logo {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.stub__logo-dot {
+  color: var(--color-accent);
+}
+
+.stub__body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.stub__content {
+  max-width: 420px;
+}
+
+.stub__content h1 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--space-3);
+}
+
+.stub__content p {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Меню користувача ---- */
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 44px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border: none;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .user-menu__trigger:hover {
+    background: var(--color-border);
+  }
+}
+
+.user-menu__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-menu__backdrop {
+  display: none;
+}
+
+.user-menu__dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  min-width: 220px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgba(43, 29, 20, 0.16);
+  padding: var(--space-2) 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  z-index: 40;
+  overflow: hidden;
+}
+
+.user-menu:focus-within .user-menu__dropdown,
+.user-menu--open .user-menu__dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Наведення відкриває меню лише на пристроях, де hover справді означає
+   наведення мишкою (не дотик), І лише на десктопній ширині — інакше
+   при вузькому вікні (адаптація під мобільний, але з реальною мишкою)
+   курсор випадково "відкриває" нижню шторку через hover, вона
+   накладається на контент без затемнення-підложки (та зникає назад,
+   щойно мишка з'їжджає), бо .user-menu__backdrop керується лише
+   класом .user-menu--open, а не hover. */
+@media (hover: hover) and (pointer: fine) and (min-width: 641px) {
+  .user-menu:hover .user-menu__dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
+.user-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+  font-size: var(--fs-base);
+  color: var(--color-text);
+  position: relative;
+}
+
+.user-menu__item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: 0;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.user-menu__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .user-menu__item:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+/* ---- Мобільна адаптація: меню виїжджає знизу як шторка ---- */
+
+@media (max-width: 640px) {
+  .stub__search {
+    display: none;
+  }
+
+  .user-menu__dropdown {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -12px 28px rgba(43, 29, 20, 0.2);
+    padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.25s ease, opacity 0.25s ease, visibility 0.25s;
+  }
+
+  .user-menu--open .user-menu__dropdown {
+    transform: translateY(0);
+  }
+
+  .user-menu__item {
+    padding: var(--space-4);
+    font-size: var(--fs-md);
+  }
+
+  .user-menu__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(43, 29, 20, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s;
+    z-index: 39;
+  }
+
+  .user-menu--open .user-menu__backdrop {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* ---- Мобільний пошук: поле + кнопка ШІ-чату + кнопка закрити, як окремі елементи ---- */
+
+.mobile-search {
+  display: none;
+}
+
+/* Меню користувача відкрите — ховаємо плаваючу кнопку пошуку повністю,
+   щоб вона точно не наїжджала на шторку меню (JS також закриває саме
+   поле, якщо воно було розкрите — див. main.ts). */
+body.has-open-user-menu .mobile-search {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-search {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    position: fixed;
+    /* Ліва межа тепер теж задана — панель "розтягнута" на всю ширину
+       між відступами, а не стиснута до вмісту справа. Це дає полю
+       пошуку простір рости на весь вільний простір, без зайвого
+       відступу праворуч, що лишався від старого фіксованого max-width.
+       Самі відступи зменшені (space-4 замість space-6), щоб уся
+       область пошуку була трохи ширшою й розтягнутою по краях. */
+    left: var(--space-4);
+    right: var(--space-4);
+    bottom: var(--space-5);
+    z-index: 35;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+  }
+
+  /* --- поле пошуку: власна "пігулка", в закритому стані стиснута до 0 --- */
+  .mobile-search__field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 0 0;
+    min-width: 0;
+    height: 56px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    box-shadow: 0 10px 26px rgba(43, 29, 20, 0.2);
+    overflow: hidden;
+    opacity: 0;
+    /* Тільки opacity — без transition на flex-grow.
+       Анімація ширини під час набору на iOS змушує Safari
+       перераховувати позицію каретки → дригання. */
+    transition: opacity 0.15s ease;
+  }
+
+  .mobile-search--open .mobile-search__field {
+    flex-grow: 1;
+    opacity: 1;
+  }
+
+  .mobile-search__field-icon {
+    position: absolute;
+    left: var(--space-4);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  .mobile-search__input {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    border: none;
+    background: none;
+    padding: 0 var(--space-3) 0 44px;
+    font-family: var(--font-body);
+    /* Явно 16px — критично для iOS Safari: менше = авто-зум + дригання
+       каретки. line-height фіксований, щоб курсор не стрибав по вертикалі. */
+    font-size: 16px;
+    line-height: 1.25;
+    color: var(--color-text);
+    -webkit-appearance: none;
+    appearance: none;
+    /* Прибираємо будь-які трансформації/фільтри, які на iOS можуть
+       зсувати рендер каретки відносно тексту. */
+    transform: none;
+    -webkit-transform: none;
+  }
+
+  .mobile-search__input:focus {
+    outline: none;
+  }
+
+  .mobile-search__input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  /* --- кнопка ШІ-чату: з'являється лише в розкритому стані, зі свіченням --- */
+  .mobile-search__ai {
+    flex-shrink: 0;
+    width: 0;
+    height: 56px;
+    border-radius: 999px;
+    border: none;
+    background: #4A3B7C;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    opacity: 0;
+    transform: scale(0.6);
+    /* Швидка поява без довгої анімації ширини — менше reflow під час фокусу. */
+    transition: width 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
+  }
+
+  .mobile-search--open .mobile-search__ai {
+    width: 56px;
+    opacity: 1;
+    transform: scale(1);
+    /* Статичне свічення замість infinite animation.
+       Безперервний box-shadow animation на iOS Safari провокує
+       постійні перемальовки шару поруч із інпутом — каретка знову
+       починає дригати після того, як спочатку заспокоїлась. */
+    box-shadow: 0 0 14px 2px rgba(124, 92, 255, 0.5),
+      0 0 26px 6px rgba(255, 111, 216, 0.32), 0 0 36px 10px rgba(52, 209, 232, 0.22);
+  }
+
+  .mobile-search__ai svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  /* --- toggle: завжди власне коло — лупа в закритому, "закрити" у відкритому --- */
+  .mobile-search__toggle {
+    position: relative;
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: none;
+    background: var(--color-accent);
+    box-shadow: 0 8px 20px rgba(43, 29, 20, 0.25);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.25s ease, box-shadow 0.25s ease, color 0.25s ease;
+  }
+
+  .mobile-search--open .mobile-search__toggle {
+    background: var(--color-error);
+    box-shadow: 0 10px 26px rgba(179, 67, 43, 0.35);
+    color: #fff;
+  }
+
+  .mobile-search__icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .mobile-search__icon--close {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+
+  .mobile-search--open .mobile-search__icon--search {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+
+  .mobile-search--open .mobile-search__icon--close {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .stub__ai-search {
+    display: none;
+  }
+}

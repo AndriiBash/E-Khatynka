@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Є-Хатинка</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/preloader.css" />
+  <link rel="stylesheet" href="src/css/main.css" />
+</head>
+<body>
+
+  <div class="preloader" id="preloader">
+    <div class="preloader__mark"><span class="logo-accent">Є-</span>Хатинка<span class="preloader__mark-dot">.</span></div>
+    <div class="preloader__bar"><div class="preloader__bar-fill"></div></div>
+  </div>
+
+  <div class="stub">
+    <header class="stub__topbar">
+      <span class="stub__logo"><span class="logo-accent">Є-</span>Хатинка<span class="stub__logo-dot">.</span></span>
+      <div class="stub__search">
+        <svg class="stub__search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
+          <path d="M21 21L17.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input type="text" id="desktop-search-input" placeholder="Знайти в Є-Хатинці" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <button class="stub__search-clear" id="desktop-search-clear" type="button" aria-label="Очистити пошук">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <button class="stub__ai-search" id="desktop-ai-search" type="button">
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 2L13.545 8.455L20 10L13.545 11.545L12 18L10.455 11.545L4 10L10.455 8.455L12 2Z"/>
+          <path d="M19 14L19.755 16.245L22 17L19.755 17.755L19 20L18.245 17.755L16 17L18.245 16.245L19 14Z"/>
+          <path d="M5 3L5.545 4.955L7.5 5.5L5.545 6.045L5 8L4.455 6.045L2.5 5.5L4.455 4.955L5 3Z"/>
+        </svg>
+        <span>ШІ-пошук</span>
+      </button>
+      <div class="stub__topbar-spacer"></div>
+      <div id="auth-slot"></div>
+    </header>
+
+    <main class="stub__body">
+      <div class="stub__content">
+        <h1 id="greeting">Ласкаво просимо до Є-Хатинки</h1>
+        <p>Каталог, кошик і рекомендації від ШІ-асистента з'являться на наступних етапах.</p>
+      </div>
+    </main>
+
+    <div class="mobile-search" id="mobile-search">
+      <div class="mobile-search__field">
+        <svg class="mobile-search__field-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
+          <path d="M21 21L17.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input type="text" class="mobile-search__input" id="mobile-search-input" placeholder="Пошук" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      </div>
+      <button class="mobile-search__ai" id="mobile-search-ai" type="button" aria-label="Запитати ШІ-асистента">
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 2L13.545 8.455L20 10L13.545 11.545L12 18L10.455 11.545L4 10L10.455 8.455L12 2Z"/>
+          <path d="M19 14L19.755 16.245L22 17L19.755 17.755L19 20L18.245 17.755L16 17L18.245 16.245L19 14Z"/>
+          <path d="M5 3L5.545 4.955L7.5 5.5L5.545 6.045L5 8L4.455 6.045L2.5 5.5L4.455 4.955L5 3Z"/>
+        </svg>
+      </button>
+      <button class="mobile-search__toggle" id="mobile-search-toggle" type="button" aria-label="Пошук" aria-expanded="false">
+        <svg class="mobile-search__icon mobile-search__icon--search" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
+          <path d="M21 21L17.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <svg class="mobile-search__icon mobile-search__icon--close" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="dist/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Вхід – Є-Хатинка</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/auth.css" />
+</head>
+<body>
+
+  <div class="auth">
+    <section class="auth__brand">
+      <div class="auth__brand-top">Є-Хатинка<span class="auth__brand-dot">.</span></div>
+
+      <div class="auth__brand-mid">
+        <h1>З поверненням!</h1>
+        <p>Увійдіть, щоб продовжити замовлення та бачити персональні рекомендації від нашого асистента.</p>
+      </div>
+
+      <div class="auth__brand-icons" aria-hidden="true">
+        <span>🥐</span><span>🍞</span><span>🍰</span><span>☕</span>
+      </div>
+    </section>
+
+    <section class="auth__panel">
+      <div class="auth__form-wrap">
+        <div class="session-banner" id="already-logged-in"></div>
+
+        <h2>Увійти</h2>
+        <p class="auth__subtitle">Раді бачити вас знову</p>
+
+        <form id="login-form" novalidate>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" autocomplete="email" />
+            <span class="field-error" id="email-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" />
+            <span class="field-error" id="password-error"></span>
+          </div>
+
+          <button type="submit" class="btn--primary">Увійти</button>
+
+          <div class="form-message" id="form-message"></div>
+        </form>
+
+        <p class="auth__switch">Ще немає акаунта? <a href="register.html">Зареєструватися</a></p>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="dist/js/auth.js"></script>
+</body>
+</html>

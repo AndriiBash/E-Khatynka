@@ -1,0 +1,136 @@
+/* ==============================
+   Дизайн-токени "Є-Хатинка"
+   ============================== */
+
+:root {
+  --color-bg: #FBF5E9;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F3EBDA;
+  --color-text: #2B1D14;
+  --color-text-muted: #7A6A57;
+  --color-border: #E7DCC5;
+
+  --color-accent: #C9832E;
+  --color-accent-dark: #A8691F;
+
+  --color-secondary: #5F7A4F;
+  --color-secondary-dark: #4A6039;
+
+  --color-error: #B3432B;
+  --color-error-bg: #F7E4DD;
+  --color-success: #5F7A4F;
+
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", Roboto, "Helvetica Neue", "Manrope", Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", Roboto, "Helvetica Neue", "Manrope", Arial, sans-serif;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-md: 1.125rem;
+  --fs-lg: 1.375rem;
+  --fs-xl: 1.75rem;
+  --fs-2xl: 2.25rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --shadow-card: 0 1px 2px rgba(43, 29, 20, 0.06), 0 6px 16px rgba(43, 29, 20, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent-dark);
+  outline-offset: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition: background 0.12s ease;
+}
+
+.btn--ghost {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.btn--primary-sm {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--ghost:hover {
+    background: var(--color-border);
+  }
+
+  .btn--primary-sm:hover {
+    background: var(--color-accent-dark);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Спільний клас для акцентного забарвлення частини лого "Є-Хатинка." —
+   використовується на всіх трьох сторінках (tokens.css підключений
+   всюди, на відміну від main.css/preloader.css/auth.css). */
+.logo-accent {
+  color: var(--color-accent);
+}

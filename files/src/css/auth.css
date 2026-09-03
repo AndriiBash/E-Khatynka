@@ -1,0 +1,221 @@
+/* ==============================
+   Сторінки входу та реєстрації
+   ============================== */
+
+.auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.auth__brand {
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255,255,255,0.10) 0, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(255,255,255,0.08) 0, transparent 40%),
+    linear-gradient(155deg, #C9832E 0%, #A8691F 55%, #7A4A16 100%);
+  color: #fff;
+  padding: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.auth__brand-top {
+  display: flex;
+  align-items: center;
+  height: 76px;
+  flex-shrink: 0;
+  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) 0 calc(-1 * var(--space-7));
+  padding: 0 var(--space-6);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.auth__brand-dot {
+  color: #FBF5E9;
+}
+
+.auth__brand-mid {
+  max-width: 420px;
+}
+
+.auth__brand-mid h1 {
+  font-size: var(--fs-2xl);
+  color: #fff;
+  line-height: 1.2;
+  margin-bottom: var(--space-4);
+}
+
+.auth__brand-mid p {
+  font-size: var(--fs-md);
+  color: rgba(255,255,255,0.88);
+  line-height: 1.5;
+}
+
+.auth__brand-icons {
+  display: flex;
+  gap: var(--space-5);
+  font-size: 2rem;
+  opacity: 0.9;
+}
+
+.auth__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--color-bg);
+}
+
+.auth__form-wrap {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth__form-wrap h2 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--space-2);
+}
+
+.auth__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--space-5);
+}
+
+.field {
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="tel"],
+.field input[type="password"] {
+  width: 100%;
+  height: 46px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  color: var(--color-text);
+}
+
+.field input:focus {
+  border-color: var(--color-accent);
+}
+
+.input--invalid {
+  border-color: var(--color-error) !important;
+}
+
+.field-error {
+  display: block;
+  min-height: 1.2em;
+  font-size: var(--fs-xs);
+  color: var(--color-error);
+  margin-top: var(--space-1);
+}
+
+.field--checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field--checkbox label {
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+.field--checkbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+
+.btn--primary {
+  width: 100%;
+  height: 48px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-2);
+  border: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover {
+    background: var(--color-accent-dark);
+  }
+}
+
+.form-message {
+  display: none;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.form-message--visible {
+  display: block;
+  background: #E7F0E0;
+  color: var(--color-success);
+}
+
+.form-message--visible.form-message--error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.auth__switch {
+  margin-top: var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.auth__switch a {
+  color: var(--color-accent-dark);
+  font-weight: 600;
+}
+
+.session-banner {
+  display: none;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.session-banner--visible {
+  display: block;
+}
+
+@media (max-width: 860px) {
+  .auth {
+    grid-template-columns: 1fr;
+  }
+  .auth__brand {
+    display: none;
+  }
+}

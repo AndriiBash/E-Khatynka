@@ -1,0 +1,71 @@
+/* ==============================
+   Прелоадер
+   ============================== */
+
+.preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  background: var(--color-bg);
+  transition: opacity 0.35s ease;
+}
+
+.preloader--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preloader__mark {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+  animation: preloader-breathe 1.8s ease-in-out infinite;
+}
+
+.preloader__mark-dot {
+  color: var(--color-accent);
+}
+
+.preloader__bar {
+  width: 160px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.preloader__bar-fill {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-secondary));
+  animation: preloader-slide 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes preloader-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes preloader-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preloader__mark {
+    animation: none;
+  }
+  .preloader__bar-fill {
+    animation: none;
+    width: 100%;
+  }
+}
