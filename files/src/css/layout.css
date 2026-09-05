@@ -1,0 +1,591 @@
+/* ==============================
+   Основний макет: категорії / товари / кошик
+   ============================== */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) 1fr minmax(260px, 300px);
+  gap: var(--space-6);
+  align-items: start;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  width: 100%;
+}
+
+/* ---- Категорії (зліва) ---- */
+
+.categories-sidebar {
+  position: sticky;
+  /* 76px — висота шапки (.stub__topbar), яка теж sticky й лишається
+     зверху — щоб сайдбар не заїжджав під неї. */
+  top: calc(76px + var(--space-5));
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+}
+
+.categories-sidebar__title {
+  font-size: var(--fs-md);
+  margin-bottom: var(--space-4);
+}
+
+.categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.categories__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.categories__item--active {
+  background: var(--color-surface-muted);
+  color: var(--color-accent-dark);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .categories__item:not(.categories__item--active):hover {
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+  }
+}
+
+/* ---- Товари (по центру) ---- */
+
+.products-section h1 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--space-2);
+}
+
+.products-section > p {
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-5);
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--space-4);
+}
+
+.product-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-card);
+}
+
+.product-card__image {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.25rem;
+  background: var(--color-surface-muted);
+  border-radius: 50%;
+  margin-bottom: var(--space-3);
+}
+
+.product-card__name {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+  min-height: 2.6em;
+}
+
+.product-card__price {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  margin-bottom: var(--space-3);
+}
+
+.product-card__add {
+  width: 100%;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card__add:hover {
+    background: var(--color-accent);
+    color: #fff;
+  }
+}
+
+/* ---- Кошик (справа) ---- */
+
+.cart-panel {
+  position: sticky;
+  top: calc(76px + var(--space-5));
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  /* Зовнішня тінь — картка "піднята" над фоном; менша дозована тінь
+     всередині власного тіла списку (нижче) — та сама картка виглядає
+     ще й трохи "врізаною" зсередини, ефект глибини. */
+  box-shadow: var(--shadow-card);
+  max-height: calc(100vh - 76px - var(--space-5) * 2);
+}
+
+.cart-panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-md);
+  margin-bottom: var(--space-4);
+}
+
+.cart-panel__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.cart-panel__count.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.cart-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  min-height: 120px;
+  /* Внутрішня тінь — той самий "ефект глибини": вміст кошика виглядає,
+     ніби лежить у невеликому заглибленні, а не просто на плоскому фоні. */
+  box-shadow: inset 0 2px 6px rgba(43, 29, 20, 0.1), inset 0 -1px 2px rgba(43, 29, 20, 0.04);
+}
+
+.cart-empty {
+  margin: var(--space-4) 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.cart-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.cart-item__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cart-item__name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cart-item__price {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.cart-item__qty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.cart-item__qty button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--fs-base);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cart-item__qty button:hover {
+    background: var(--color-border);
+  }
+}
+
+.cart-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.cart-panel__total {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+/* ---- Мобільна адаптація: одна колонка, категорії — рядок фішок
+   зверху, панель кошика зникає (замінюється плаваючою кнопкою + шторкою
+   знизу, див. .mobile-cart-* нижче). ---- */
+
+@media (max-width: 640px) {
+  .layout {
+    display: block;
+    padding: var(--space-4);
+  }
+
+  .categories-sidebar {
+    position: static;
+    box-shadow: none;
+    background: none;
+    padding: 0;
+    margin-bottom: var(--space-4);
+  }
+
+  .categories-sidebar__title {
+    display: none;
+  }
+
+  .categories-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: var(--space-2);
+    padding-bottom: var(--space-1);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .categories__item {
+    flex-shrink: 0;
+    width: auto;
+    white-space: nowrap;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .categories__item--active {
+    background: var(--color-accent);
+    color: #fff;
+  }
+
+  .cart-panel {
+    display: none;
+  }
+
+  /* Місце під плаваючі кнопки пошуку/кошика внизу, щоб останній ряд
+     товарів не ховався під ними. */
+  .products-section {
+    padding-bottom: 160px;
+  }
+}
+
+/* ==============================
+   Плаваюча кнопка кошика на мобілці — над кнопкою пошуку
+   ============================== */
+
+.mobile-cart-button {
+  display: none;
+}
+
+body.has-open-user-menu .mobile-cart-button {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Ховаємо, поки відкрите поле пошуку — інакше довелось би синхронізувати
+   позицію з тим самим JS, що піднімає поле над клавіатурою (main.ts). */
+.stub:has(.mobile-search--open) .mobile-cart-button {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-cart-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: var(--space-4);
+    /* Рівно над кнопкою пошуку: її висота (56px) + відступ від низу
+       (--space-5) + невеликий проміжок (--space-3). */
+    bottom: calc(56px + var(--space-5) + var(--space-3));
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: none;
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 10px 26px rgba(43, 29, 20, 0.2);
+    z-index: 35;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+  }
+
+  .mobile-cart-button svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.mobile-cart-button__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  background: var(--color-error);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  display: none;
+}
+
+.mobile-cart-button__badge.is-visible {
+  display: flex;
+}
+
+/* ==============================
+   Мобільна шторка кошика (bottom sheet)
+   ============================== */
+
+.mobile-cart-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-cart-sheet--open {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.mobile-cart-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 29, 20, 0.55);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mobile-cart-sheet--open .mobile-cart-sheet__backdrop {
+  opacity: 1;
+}
+
+.mobile-cart-sheet__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 80vh;
+  max-height: 80dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-3) var(--space-5) var(--space-5);
+  box-shadow: 0 -10px 40px rgba(43, 29, 20, 0.25);
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-cart-sheet--open .mobile-cart-sheet__panel {
+  transform: translateY(0);
+}
+
+.mobile-cart-sheet__handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+  margin: 0 auto var(--space-4);
+  flex-shrink: 0;
+}
+
+.mobile-cart-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+.mobile-cart-sheet__header h2 {
+  font-size: var(--fs-lg);
+}
+
+.mobile-cart-sheet__close {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.mobile-cart-sheet__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-cart-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  padding: var(--space-3);
+  box-shadow: inset 0 2px 6px rgba(43, 29, 20, 0.1), inset 0 -1px 2px rgba(43, 29, 20, 0.04);
+}
+
+.mobile-cart-sheet__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-4);
+  flex-shrink: 0;
+}
+
+.mobile-cart-sheet__total {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+/* ==============================
+   Підвал сайту
+   ============================== */
+
+.site-footer {
+  margin-top: var(--space-7);
+  background: var(--color-text);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.site-footer__inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.site-footer__brand {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: #fff;
+}
+
+.site-footer__brand .logo-accent {
+  color: var(--color-accent);
+}
+
+.site-footer__social {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.site-footer__social a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.site-footer__social svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-footer__social a:hover {
+    background: var(--color-accent);
+  }
+}
+
+.site-footer__thesis {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 480px;
+  line-height: 1.6;
+}

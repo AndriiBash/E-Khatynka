@@ -11,7 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="src/css/tokens.css" />
   <link rel="stylesheet" href="src/css/preloader.css" />
+  <link rel="stylesheet" href="src/css/auth.css" />
   <link rel="stylesheet" href="src/css/main.css" />
+  <link rel="stylesheet" href="src/css/layout.css" />
 </head>
 <body>
 
@@ -22,7 +24,7 @@
 
   <div class="stub">
     <header class="stub__topbar">
-      <span class="stub__logo"><span class="logo-accent">Є-</span>Хатинка<span class="stub__logo-dot">.</span></span>
+      <a class="stub__logo" href="index.html"><span class="logo-accent">Є-</span>Хатинка<span class="stub__logo-dot">.</span></a>
       <div class="stub__search">
         <svg class="stub__search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
@@ -48,11 +50,36 @@
     </header>
 
     <main class="stub__body">
-      <div class="stub__content">
-        <h1 id="greeting">Ласкаво просимо до Є-Хатинки</h1>
-        <p>Каталог, кошик і рекомендації від ШІ-асистента з'являться на наступних етапах.</p>
+      <div class="layout">
+        <aside class="categories-sidebar">
+          <h2 class="categories-sidebar__title">Категорії</h2>
+          <nav class="categories-list" id="categories-list"></nav>
+        </aside>
+
+        <section class="products-section">
+          <h1 id="greeting">Ласкаво просимо до Є-Хатинки</h1>
+          <p>Свіжа випічка щодня — обирайте категорію зліва або гортайте весь каталог.</p>
+          <div class="products-grid" id="products-grid"></div>
+        </section>
+
+        <aside class="cart-panel">
+          <h2 class="cart-panel__title">Кошик <span class="cart-panel__count" data-cart-count>0</span></h2>
+          <div class="cart-panel__body" id="cart-panel-body"></div>
+          <div class="cart-panel__footer">
+            <div class="cart-panel__total">Разом: <span id="cart-total">0 грн</span></div>
+            <button class="btn btn--primary-sm" type="button">Оформити</button>
+          </div>
+        </aside>
       </div>
     </main>
+
+    <button class="mobile-cart-button" id="mobile-cart-button" type="button" aria-label="Кошик">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 8H20L18.5 18.5C18.36 19.47 17.53 20.2 16.55 20.2H9.45C8.47 20.2 7.64 19.47 7.5 18.5L6 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M9 8V6.5C9 4.57 10.57 3 12.5 3C14.43 3 16 4.57 16 6.5V8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span class="mobile-cart-button__badge" data-cart-count>0</span>
+    </button>
 
     <div class="mobile-search" id="mobile-search">
       <div class="mobile-search__field">
@@ -78,6 +105,136 @@
           <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <div class="site-footer__brand"><span class="logo-accent">Є-</span>Хатинка<span class="logo-accent">.</span></div>
+
+      <div class="site-footer__social">
+        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="15" height="15" rx="4.5" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="10" cy="10" r="3.7" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="14.3" cy="5.7" r="1" fill="currentColor"/>
+          </svg>
+        </a>
+        <a href="https://t.me" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M5.8 10.15L13.5 6.9C13.9 6.73 14.32 7.06 14.19 7.48L12.75 13.1C12.64 13.53 12.13 13.68 11.8 13.38L9.7 11.5L8.6 12.5C8.4 12.68 8.08 12.57 8.03 12.31L7.7 10.6L5.8 10.15Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M13.6 7L9.7 11.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </a>
+      </div>
+
+      <p class="site-footer__thesis">Кваліфікаційна робота магістра Ізбаш А.В., група 366</p>
+    </div>
+  </footer>
+
+  <div class="mobile-cart-sheet" id="mobile-cart-sheet" aria-hidden="true">
+    <div class="mobile-cart-sheet__backdrop" id="mobile-cart-sheet-backdrop"></div>
+    <div class="mobile-cart-sheet__panel" role="dialog" aria-modal="true" aria-label="Кошик">
+      <div class="mobile-cart-sheet__handle"></div>
+      <div class="mobile-cart-sheet__header">
+        <h2>Кошик</h2>
+        <button class="mobile-cart-sheet__close" id="mobile-cart-sheet-close" type="button" aria-label="Закрити">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="mobile-cart-sheet__body" id="mobile-cart-body"></div>
+      <div class="mobile-cart-sheet__footer">
+        <div class="mobile-cart-sheet__total">Разом: <span id="mobile-cart-total">0 грн</span></div>
+        <button class="btn btn--primary-sm" type="button">Оформити</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="auth-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop" id="auth-modal-backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <button class="auth-modal__close" id="auth-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="auth-modal__panel" id="auth-modal-login">
+        <h2 id="auth-modal-title">Вхід</h2>
+        <p class="auth-modal__subtitle">Раді бачити вас знову</p>
+
+        <form id="modal-login-form" novalidate>
+          <div class="field">
+            <label for="modal-login-email">Email</label>
+            <input type="email" id="modal-login-email" name="email" autocomplete="email" />
+            <span class="field-error" id="modal-login-email-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-login-password">Пароль</label>
+            <input type="password" id="modal-login-password" name="password" autocomplete="current-password" />
+            <span class="field-error" id="modal-login-password-error"></span>
+          </div>
+
+          <button type="submit" class="btn--primary">Увійти</button>
+
+          <div class="form-message" id="modal-login-message"></div>
+        </form>
+
+        <p class="auth-modal__switch">Ще немає акаунта? <button type="button" class="auth-modal__link" data-switch-to="register">Зареєструватися</button></p>
+      </div>
+
+      <div class="auth-modal__panel" id="auth-modal-register" hidden>
+        <h2>Створити акаунт</h2>
+        <p class="auth-modal__subtitle">Це займе не більше хвилини</p>
+
+        <form id="modal-register-form" novalidate>
+          <div class="field">
+            <label for="modal-register-fullName">Ім'я та прізвище</label>
+            <input type="text" id="modal-register-fullName" name="fullName" autocomplete="name" />
+            <span class="field-error" id="modal-register-fullName-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-email">Email</label>
+            <input type="email" id="modal-register-email" name="email" autocomplete="email" />
+            <span class="field-error" id="modal-register-email-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-phone">Телефон</label>
+            <input type="tel" id="modal-register-phone" name="phone" placeholder="+380XXXXXXXXX" autocomplete="tel" inputmode="tel" maxlength="18" />
+            <span class="field-error" id="modal-register-phone-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-password">Пароль</label>
+            <input type="password" id="modal-register-password" name="password" autocomplete="new-password" />
+            <span class="field-error" id="modal-register-password-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-passwordConfirm">Підтвердження пароля</label>
+            <input type="password" id="modal-register-passwordConfirm" name="passwordConfirm" autocomplete="new-password" />
+            <span class="field-error" id="modal-register-passwordConfirm-error"></span>
+          </div>
+
+          <div class="field field--checkbox">
+            <input type="checkbox" id="modal-register-agree" name="agree" />
+            <label for="modal-register-agree">Погоджуюсь з умовами використання та політикою конфіденційності</label>
+          </div>
+          <span class="field-error" id="modal-register-agree-error"></span>
+
+          <button type="submit" class="btn--primary">Зареєструватися</button>
+
+          <div class="form-message" id="modal-register-message"></div>
+        </form>
+
+        <p class="auth-modal__switch">Вже є акаунт? <button type="button" class="auth-modal__link" data-switch-to="login">Увійти</button></p>
+      </div>
     </div>
   </div>
 

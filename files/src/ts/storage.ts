@@ -1,79 +1,11 @@
-import type { User, SessionUser } from "./types.js";
+import type { SessionUser } from "./types.js";
 
 // ==============================
-// Мок "бази даних" на localStorage.
-// Коли з'явиться backend — ці функції заміняться на fetch-виклики до REST API,
-// а сигнатури залишаться максимально близькими.
+// Клієнт до реального backend API (server.js + SQLite, /api/*).
+// Сигнатури тих самих функцій, що були в localStorage-моку, лишились
+// незмінними (тепер тільки асинхронні) — саме для цього вони й були
+// спроектовані так із самого початку, дивись старий коментар нижче.
 // ==============================
-
-const USERS_KEY = "ehatynka_users";
-const SESSION_KEY = "ehatynka_session";
-
-// Спрощене "хешування" лише для прототипу — НЕ використовувати в продакшн.
-// Реальний бекенд повинен хешувати паролі через bcrypt/argon2 на сервері.
-function fakeHash(password: string): string {
-  let hash = 0;
-  for (let i = 0; i < password.length; i++) {
-    hash = (hash << 5) - hash + password.charCodeAt(i);
-    hash |= 0;
-  }
-  return `h_${hash}_${password.length}`;
-}
-
-// Деякі мобільні браузери (Safari у приватному режимі, вбудовані WebView
-// у месенджерах з увімкненим "Prevent Cross-Site Tracking" тощо) можуть
-// кидати виняток просто при зверненні до localStorage.getItem/setItem,
-// а не лише при переповненні квоти. Без try/catch це впало б синхронно
-// ще до DOMContentLoaded і зупинило б виконання всього auth.js/main.js.
-function safeGetItem(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeSetItem(key: string, value: string): boolean {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function safeRemoveItem(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // ігноруємо — немає що видаляти, якщо сховище недоступне
-  }
-}
-
-export function isStorageAvailable(): boolean {
-  try {
-    const testKey = "__ehatynka_storage_test__";
-    localStorage.setItem(testKey, "1");
-    localStorage.removeItem(testKey);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readUsers(): User[] {
-  const raw = safeGetItem(USERS_KEY);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw) as User[];
-  } catch {
-    return [];
-  }
-}
-
-function writeUsers(users: User[]): void {
-  safeSetItem(USERS_KEY, JSON.stringify(users));
-}
 
 export interface RegisterInput {
   fullName: string;
@@ -86,77 +18,53 @@ export type AuthResult =
   | { ok: true; user: SessionUser }
   | { ok: false; error: string };
 
-export function registerUser(input: RegisterInput): AuthResult {
-  if (!isStorageAvailable()) {
-    return {
-      ok: false,
-      error:
-        "Не вдалося зберегти дані на цьому пристрої. Вимкніть приватний режим браузера й спробуйте ще раз.",
-    };
-  }
+const NETWORK_ERROR =
+  "Немає з'єднання із сервером (backend error).";
 
-  const users = readUsers();
-  const emailTaken = users.some(
-    (u) => u.email.toLowerCase() === input.email.toLowerCase()
-  );
-  if (emailTaken) {
-    return { ok: false, error: "Ця email-адреса вже зареєстрована" };
-  }
-
-  const user: User = {
-    id: `u_${Date.now()}`,
-    fullName: input.fullName,
-    email: input.email,
-    phone: input.phone,
-    passwordHash: fakeHash(input.password),
-  };
-  users.push(user);
-  writeUsers(users);
-
-  const session: SessionUser = {
-    id: user.id,
-    fullName: user.fullName,
-    email: user.email,
-  };
-  safeSetItem(SESSION_KEY, JSON.stringify(session));
-  return { ok: true, user: session };
-}
-
-export function loginUser(email: string, password: string): AuthResult {
-  if (!isStorageAvailable()) {
-    return {
-      ok: false,
-      error:
-        "Не вдалося отримати доступ до сховища на цьому пристрої. Вимкніть приватний режим браузера й спробуйте ще раз.",
-    };
-  }
-
-  const users = readUsers();
-  const user = users.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase()
-  );
-  if (!user || user.passwordHash !== fakeHash(password)) {
-    return { ok: false, error: "Неправильний email або пароль" };
-  }
-  const session: SessionUser = {
-    id: user.id,
-    fullName: user.fullName,
-    email: user.email,
-  };
-  safeSetItem(SESSION_KEY, JSON.stringify(session));
-  return { ok: true, user: session };
-}
-
-export function getSession(): SessionUser | null {
-  const raw = safeGetItem(SESSION_KEY);
-  if (!raw) return null;
+async function postJson(url: string, body: unknown): Promise<AuthResult> {
+  let res: Response;
   try {
-    return JSON.parse(raw) as SessionUser;
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as AuthResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function registerUser(input: RegisterInput): Promise<AuthResult> {
+  return postJson("/api/register", input);
+}
+
+export async function loginUser(email: string, password: string): Promise<AuthResult> {
+  return postJson("/api/login", { email, password });
+}
+
+export async function getSession(): Promise<SessionUser | null> {
+  try {
+    const res = await fetch("/api/session", { credentials: "include" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { user: SessionUser | null };
+    return data.user;
   } catch {
     return null;
   }
 }
 
-export function logout(): void {
-  safeRemoveItem(SESSION_KEY);
+export async function logout(): Promise<void> {
+  try {
+    await fetch("/api/logout", { method: "POST", credentials: "include" });
+  } catch {
+    // Немає з'єднання — на клієнті все одно нічого зберігати, сесія
+    // живе тільки в куці, яку видає сервер.
+  }
 }

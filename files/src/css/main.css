@@ -153,25 +153,6 @@
 
 .stub__body {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: var(--space-6);
-}
-
-.stub__content {
-  max-width: 420px;
-}
-
-.stub__content h1 {
-  font-size: var(--fs-xl);
-  margin-bottom: var(--space-3);
-}
-
-.stub__content p {
-  color: var(--color-text-muted);
-  font-size: var(--fs-sm);
 }
 
 /* ---- Меню користувача ---- */
@@ -528,5 +509,134 @@ body.has-open-user-menu .mobile-search {
 
   .stub__ai-search {
     display: none;
+  }
+}
+
+/* ==============================
+   Модалка входу/реєстрації
+   ============================== */
+
+.auth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+}
+
+.auth-modal--open {
+  display: flex;
+}
+
+.auth-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 29, 20, 0.55);
+  animation: auth-modal-fade-in 0.18s ease;
+}
+
+.auth-modal__dialog {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  max-height: min(680px, 90vh);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(43, 29, 20, 0.35);
+  padding: var(--space-6);
+  animation: auth-modal-pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes auth-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-modal-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.auth-modal__close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.auth-modal__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .auth-modal__close:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+  }
+}
+
+/* padding-right, щоб заголовок не наїжджав на хрестик закриття */
+.auth-modal__panel h2 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--space-2);
+  padding-right: var(--space-6);
+}
+
+.auth-modal__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--space-5);
+}
+
+.auth-modal__switch {
+  margin-top: var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.auth-modal__link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-accent-dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .auth-modal {
+    padding: var(--space-3);
+  }
+
+  .auth-modal__dialog {
+    padding: var(--space-5);
   }
 }

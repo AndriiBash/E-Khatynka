@@ -1,0 +1,101 @@
+/* ==============================
+   Сторінка 404
+   ============================== */
+
+.notfound {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(201, 131, 46, 0.12) 0, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(95, 122, 79, 0.10) 0, transparent 45%),
+    var(--color-bg);
+}
+
+.notfound__logo {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-7);
+}
+
+.notfound__code {
+  font-family: var(--font-display);
+  font-size: clamp(72px, 18vw, 160px);
+  font-weight: 700;
+  line-height: 1;
+  background: linear-gradient(155deg, #C9832E 0%, #A8691F 55%, #7A4A16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.notfound__icons {
+  display: flex;
+  gap: var(--space-5);
+  font-size: 2rem;
+  margin: var(--space-4) 0 var(--space-5);
+  opacity: 0.9;
+}
+
+.notfound h1 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--space-3);
+}
+
+.notfound p {
+  max-width: 420px;
+  color: var(--color-text-muted);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  margin: 0 0 var(--space-6);
+}
+
+.notfound__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.notfound__actions .btn {
+  height: 48px;
+  padding: 0 var(--space-6);
+  font-size: var(--fs-base);
+}
+
+.notfound__back {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .notfound__back:hover {
+    color: var(--color-accent-dark);
+  }
+}
+
+@media (max-width: 480px) {
+  .notfound__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .notfound__actions .btn,
+  .notfound__back {
+    width: 100%;
+  }
+}

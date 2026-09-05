@@ -1,4 +1,6 @@
 import { getSession, logout } from "./storage.js";
+import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
+import { setupCatalog } from "./catalog.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
 
 // ==============================
@@ -114,7 +116,14 @@ function setupMobileSearch(): void {
   };
 
   const onTouchMove = (e: TouchEvent): void => {
-    if (touchMoveBlocked) e.preventDefault();
+    if (!touchMoveBlocked) return;
+    // Не чіпаємо жести всередині самого поля пошуку — інакше на iOS
+    // ламається нативне виділення тексту/перетягування каретки
+    // всередині інпута (це теж робиться через touchmove). Блокуємо
+    // прокрутку лише ФОНОВОЇ сторінки під плаваючою панеллю.
+    const target = e.target as Node | null;
+    if (target && wrap.contains(target)) return;
+    e.preventDefault();
   };
 
   const enableTouchBlock = (): void => {
@@ -266,6 +275,20 @@ function setupMobileSearch(): void {
   );
 }
 
+function setupLogoHome(): void {
+  // Лого відкрите як звичайне посилання на index.html (важливо для
+  // 404.html — там немає JS, який би це підмінив). Тут ми на самій
+  // головній сторінці, тож перехід на той самий index.html замінюємо на
+  // плавний скрол угору — без зайвого перезавантаження сторінки.
+  const logo = document.querySelector<HTMLAnchorElement>(".stub__logo");
+  if (!logo) return;
+
+  logo.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
 function setupDesktopSearchClear(): void {
   const input = document.getElementById("desktop-search-input") as HTMLInputElement | null;
   const clearBtn = document.getElementById("desktop-search-clear");
@@ -277,12 +300,12 @@ function setupDesktopSearchClear(): void {
   });
 }
 
-function render(): void {
+async function render(): Promise<void> {
   const slot = document.getElementById("auth-slot");
   const greeting = document.getElementById("greeting");
   if (!slot) return;
 
-  const session = getSession();
+  const session = await getSession();
 
   if (session) {
     const firstName = session.fullName.split(" ")[0];
@@ -320,8 +343,14 @@ function render(): void {
       </div>`;
 
     document.getElementById("logout-btn")?.addEventListener("click", () => {
-      logout();
-      render();
+      // Чекаємо, поки /api/logout справді очистить сесію на сервері —
+      // інакше render() (виклик /api/session одразу після) міг би ще
+      // застати стару, ще не закриту сесію через звичайну мережеву
+      // затримку.
+      void (async () => {
+        await logout();
+        await render();
+      })();
     });
 
     setupUserMenu();
@@ -329,20 +358,32 @@ function render(): void {
     if (greeting) {
       greeting.textContent = "Ласкаво просимо до Є-Хатинки";
     }
-    slot.innerHTML = `<a class="btn btn--primary-sm" href="login.html">Увійти</a>`;
+    slot.innerHTML = `<button class="btn btn--primary-sm" id="open-auth-modal" type="button">Увійти</button>`;
+    document.getElementById("open-auth-modal")?.addEventListener("click", () => {
+      openAuthModal("login");
+    });
   }
 }
 
 initPreloader();
 
 document.addEventListener("DOMContentLoaded", () => {
-  // hidePreloader() у finally — навіть якщо render() впаде з помилкою,
-  // прелоадер все одно сховається, а не зависне на білому екрані назавжди.
-  try {
-    render();
-  } finally {
-    hidePreloader();
-  }
+  void (async () => {
+    // hidePreloader() у finally — навіть якщо render() впаде з помилкою
+    // (напр. backend не запущено), прелоадер все одно сховається, а не
+    // зависне на білому екрані назавжди.
+    try {
+      await render();
+    } finally {
+      hidePreloader();
+    }
+  })();
   setupMobileSearch();
   setupDesktopSearchClear();
+  setupLogoHome();
+  setAuthSuccessHandler(() => {
+    void render();
+  });
+  setupAuthModal();
+  setupCatalog();
 });
