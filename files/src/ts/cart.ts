@@ -9,6 +9,7 @@ export interface CartItem {
   productId: string;
   name: string;
   price: number;
+  emoji: string;
   qty: number;
 }
 
@@ -16,6 +17,7 @@ export interface CartProduct {
   id: string;
   name: string;
   price: number;
+  emoji: string;
 }
 
 type Listener = (items: CartItem[]) => void;
@@ -39,7 +41,10 @@ export function addToCart(product: CartProduct): void {
   if (existing) {
     existing.qty += 1;
   } else {
-    items = [...items, { productId: product.id, name: product.name, price: product.price, qty: 1 }];
+    items = [
+      ...items,
+      { productId: product.id, name: product.name, price: product.price, emoji: product.emoji, qty: 1 },
+    ];
   }
   notify();
 }

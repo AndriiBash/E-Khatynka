@@ -19,6 +19,15 @@
   top: 0;
   z-index: 30;
   background: var(--color-bg);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Свідоме плавне ховання шапки на час відкритого мобільного пошуку —
+   див. коментар в setupMobileSearch (main.ts). */
+.stub__topbar--hidden {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
 }
 
 .stub__search {
@@ -41,7 +50,10 @@
 .stub__search input {
   width: 100%;
   height: 44px;
-  border-radius: 999px;
+  /* Те саме скруглення, що й у кнопок "Увійти"/"Оформити" — раніше тут
+     була пігулка (999px), яка візуально не пасувала до решти кнопок
+     сайту. */
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface-muted);
   padding: 0 52px 0 44px;
@@ -95,7 +107,9 @@
   height: 44px;
   padding: 0 var(--space-4);
   border: none;
-  border-radius: 999px;
+  /* Узгоджено з "Увійти"/"Оформити" — те саме скруглення для будь-якого
+     стану, включно з hover (там міняється лише фон, не форма). */
+  border-radius: var(--radius-sm);
   background: #4A3B7C;
   color: #fff;
   font-family: inherit;
@@ -200,6 +214,11 @@
   display: none;
 }
 
+.user-menu__dropdown-handle-hit,
+.user-menu__dropdown-header {
+  display: none;
+}
+
 .user-menu__dropdown {
   position: absolute;
   top: calc(100% + var(--space-2));
@@ -297,8 +316,60 @@
     transition: transform 0.25s ease, opacity 0.25s ease, visibility 0.25s;
   }
 
+  .user-menu__dropdown.is-dragging {
+    transition: none;
+  }
+
   .user-menu--open .user-menu__dropdown {
     transform: translateY(0);
+  }
+
+  /* Та сама "ручка" + заголовок + кнопка закриття, що й у шторці
+     кошика — єдина візуальна мова для будь-якої нижньої шторки сайту. */
+  .user-menu__dropdown-handle-hit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
+    flex-shrink: 0;
+    touch-action: none;
+  }
+
+  .user-menu__dropdown-handle {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-border);
+  }
+
+  .user-menu__dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4) var(--space-2);
+  }
+
+  .user-menu__dropdown-header h2 {
+    font-size: var(--fs-lg);
+  }
+
+  .user-menu__dropdown-close {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+  }
+
+  .user-menu__dropdown-close svg {
+    width: 18px;
+    height: 18px;
   }
 
   .user-menu__item {
@@ -399,7 +470,7 @@ body.has-open-user-menu .mobile-search {
     min-width: 0;
     border: none;
     background: none;
-    padding: 0 var(--space-3) 0 44px;
+    padding: 0 34px 0 44px;
     font-family: var(--font-body);
     /* Явно 16px — критично для iOS Safari: менше = авто-зум + дригання
        каретки. line-height фіксований, щоб курсор не стрибав по вертикалі. */
@@ -420,6 +491,35 @@ body.has-open-user-menu .mobile-search {
 
   .mobile-search__input::placeholder {
     color: var(--color-text-muted);
+  }
+
+  /* Кнопка очищення тексту прямо в полі — та сама ідея, що й на
+     десктопі (.stub__search-clear), просто трохи компактніша під
+     менше поле. */
+  .mobile-search__clear {
+    position: absolute;
+    right: var(--space-2);
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    padding: 0;
+    color: var(--color-text-muted);
+  }
+
+  .mobile-search__clear svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .mobile-search__input:not(:placeholder-shown) ~ .mobile-search__clear {
+    display: flex;
   }
 
   /* --- кнопка ШІ-чату: з'являється лише в розкритому стані, зі свіченням --- */
@@ -533,7 +633,9 @@ body.has-open-user-menu .mobile-search {
 .auth-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(43, 29, 20, 0.55);
+  /* Той самий тон, що й в інших поповерах сайту (меню користувача,
+     кошик на мобілці) — єдина візуальна мова затемнення фону. */
+  background: rgba(43, 29, 20, 0.45);
   animation: auth-modal-fade-in 0.18s ease;
 }
 

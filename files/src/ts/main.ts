@@ -1,7 +1,8 @@
 import { getSession, logout } from "./storage.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
-import { setupCatalog } from "./catalog.js";
+import { setupCatalog, setSearchQuery } from "./catalog.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
+import { setupSwipeToClose } from "./swipe-sheet.js";
 
 // ==============================
 // Головна сторінка — поки заглушка.
@@ -12,6 +13,8 @@ function setupUserMenu(): void {
   const menu = document.getElementById("user-menu");
   const trigger = document.getElementById("user-menu-trigger");
   const backdrop = document.getElementById("user-menu-backdrop");
+  const dropdown = menu?.querySelector<HTMLElement>(".user-menu__dropdown");
+  const handleHit = menu?.querySelector<HTMLElement>(".user-menu__dropdown-handle-hit");
   if (!menu || !trigger) return;
 
   const close = (): void => {
@@ -39,6 +42,13 @@ function setupUserMenu(): void {
   });
 
   backdrop?.addEventListener("click", close);
+  document.getElementById("user-menu-close")?.addEventListener("click", close);
+
+  if (dropdown && handleHit) {
+    // Той самий свайп-жест, що й у кошику на мобілці (кнопка "Меню"
+    // тепер виглядає й поводиться так само, як шторка кошика).
+    setupSwipeToClose(dropdown, handleHit, close);
+  }
 
   document.addEventListener("click", (e) => {
     if (!menu.contains(e.target as Node)) close();
@@ -54,6 +64,7 @@ function setupMobileSearch(): void {
   const toggle = document.getElementById("mobile-search-toggle");
   const input = document.getElementById("mobile-search-input") as HTMLInputElement | null;
   const aiBtn = document.getElementById("mobile-search-ai");
+  const clearTextBtn = document.getElementById("mobile-search-clear");
   if (!wrap || !toggle || !input) return;
 
   const isOpen = (): boolean => wrap.classList.contains("mobile-search--open");
@@ -73,7 +84,6 @@ function setupMobileSearch(): void {
     savedScrollY = window.scrollY || window.pageYOffset || 0;
     const html = document.documentElement;
     html.style.overflow = "hidden";
-    html.style.height = "100%";
     html.style.overscrollBehavior = "none";
     document.body.style.position = "fixed";
     document.body.style.top = `-${savedScrollY}px`;
@@ -81,14 +91,12 @@ function setupMobileSearch(): void {
     document.body.style.right = "0";
     document.body.style.width = "100%";
     document.body.style.overflow = "hidden";
-    document.body.style.height = "100%";
     document.body.style.overscrollBehavior = "none";
   };
 
   const unlockBodyScroll = (): void => {
     const html = document.documentElement;
     html.style.overflow = "";
-    html.style.height = "";
     html.style.overscrollBehavior = "";
     document.body.style.position = "";
     document.body.style.top = "";
@@ -96,7 +104,6 @@ function setupMobileSearch(): void {
     document.body.style.right = "";
     document.body.style.width = "";
     document.body.style.overflow = "";
-    document.body.style.height = "";
     document.body.style.overscrollBehavior = "";
     window.scrollTo(0, savedScrollY);
   };
@@ -181,6 +188,13 @@ function setupMobileSearch(): void {
     lockedKeyboardH = 0;
     lockBodyScroll();
     enableTouchBlock();
+    // Через lockBodyScroll (position:fixed на body) sticky-шапка втрачає
+    // свою "прилипну" позицію (вона рахується від реального скролу, а
+    // його більше немає) і різко "телепортується" за межі екрана — це і
+    // був той самий баг зі зникаючим тайтлбаром. Замість боротьби з тим,
+    // як браузер рахує sticky в цей момент, ховаємо шапку самі, свідомо
+    // й плавно — так це виглядає як навмисна дія, а не збій.
+    document.querySelector(".stub__topbar")?.classList.add("stub__topbar--hidden");
 
     input.focus({ preventScroll: true });
 
@@ -203,12 +217,16 @@ function setupMobileSearch(): void {
     wrap.classList.remove("mobile-search--open");
     toggle.setAttribute("aria-expanded", "false");
     toggle.setAttribute("aria-label", "Пошук");
-    input.value = "";
+    // Раніше тут очищався input.value — через це закриття поля виглядало
+    // так, ніби воно "забуває" все, що ти щойно шукав. Тепер текст (і
+    // відфільтрований каталог під ним) лишається, як і був; закриваємо
+    // лише саму панель уведення.
     input.blur();
     wrap.style.bottom = "";
     lockedKeyboardH = 0;
     unlockBodyScroll();
     disableTouchBlock();
+    document.querySelector(".stub__topbar")?.classList.remove("stub__topbar--hidden");
     isSettling = false;
     if (settleTimer !== undefined) {
       clearTimeout(settleTimer);
@@ -248,9 +266,21 @@ function setupMobileSearch(): void {
   });
 
   // На кожен символ — повторно нав'язуємо lock. Саме в цей момент
-  // iOS часто намагається проскролити каретку у видиму зону.
+  // iOS часто намагається проскролити каретку у видиму зону. Заодно —
+  // це саме поле пошуку тепер справді фільтрує каталог, а не просто
+  // стоїть для вигляду.
   input.addEventListener("input", () => {
     if (isOpen()) reassertLock();
+    setSearchQuery(input.value);
+  });
+
+  // Кнопка "×" ПРЯМО В полі — очищає тільки текст (і фільтр), не
+  // закриваючи саму панель пошуку. Не плутати з великою червоною
+  // кнопкою "×" поруч із ШІ-кнопкою — та закриває всю панель.
+  clearTextBtn?.addEventListener("click", () => {
+    input.value = "";
+    input.focus();
+    setSearchQuery("");
   });
 
   // selectionchange теж може провокувати скрол (переміщення каретки).
@@ -294,9 +324,14 @@ function setupDesktopSearchClear(): void {
   const clearBtn = document.getElementById("desktop-search-clear");
   if (!input || !clearBtn) return;
 
+  input.addEventListener("input", () => {
+    setSearchQuery(input.value);
+  });
+
   clearBtn.addEventListener("click", () => {
     input.value = "";
     input.focus();
+    setSearchQuery("");
   });
 }
 
@@ -323,6 +358,17 @@ async function render(): Promise<void> {
         </button>
         <div class="user-menu__backdrop" id="user-menu-backdrop"></div>
         <div class="user-menu__dropdown">
+          <div class="user-menu__dropdown-handle-hit">
+            <div class="user-menu__dropdown-handle"></div>
+          </div>
+          <div class="user-menu__dropdown-header">
+            <h2>Меню</h2>
+            <button class="user-menu__dropdown-close" id="user-menu-close" type="button" aria-label="Закрити">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           <button class="user-menu__item" type="button">
             <img class="user-menu__icon" src="assets/icons/orders.svg" alt="" aria-hidden="true" />
             Мої замовлення

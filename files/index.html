@@ -65,10 +65,9 @@
         <aside class="cart-panel">
           <h2 class="cart-panel__title">Кошик <span class="cart-panel__count" data-cart-count>0</span></h2>
           <div class="cart-panel__body" id="cart-panel-body"></div>
-          <div class="cart-panel__footer">
-            <div class="cart-panel__total">Разом: <span id="cart-total">0 грн</span></div>
-            <button class="btn btn--primary-sm" type="button">Оформити</button>
-          </div>
+          <button class="cart-panel__checkout" id="cart-checkout-btn" type="button" disabled>
+            Оформити · <span id="cart-total">0 ₴</span>
+          </button>
         </aside>
       </div>
     </main>
@@ -88,6 +87,11 @@
           <path d="M21 21L17.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
         <input type="text" class="mobile-search__input" id="mobile-search-input" placeholder="Пошук" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <button class="mobile-search__clear" id="mobile-search-clear" type="button" aria-label="Очистити">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
       <button class="mobile-search__ai" id="mobile-search-ai" type="button" aria-label="Запитати ШІ-асистента">
         <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -136,7 +140,9 @@
   <div class="mobile-cart-sheet" id="mobile-cart-sheet" aria-hidden="true">
     <div class="mobile-cart-sheet__backdrop" id="mobile-cart-sheet-backdrop"></div>
     <div class="mobile-cart-sheet__panel" role="dialog" aria-modal="true" aria-label="Кошик">
-      <div class="mobile-cart-sheet__handle"></div>
+      <div class="mobile-cart-sheet__handle-hit">
+        <div class="mobile-cart-sheet__handle"></div>
+      </div>
       <div class="mobile-cart-sheet__header">
         <h2>Кошик</h2>
         <button class="mobile-cart-sheet__close" id="mobile-cart-sheet-close" type="button" aria-label="Закрити">
@@ -146,10 +152,9 @@
         </button>
       </div>
       <div class="mobile-cart-sheet__body" id="mobile-cart-body"></div>
-      <div class="mobile-cart-sheet__footer">
-        <div class="mobile-cart-sheet__total">Разом: <span id="mobile-cart-total">0 грн</span></div>
-        <button class="btn btn--primary-sm" type="button">Оформити</button>
-      </div>
+      <button class="cart-panel__checkout" id="mobile-cart-checkout-btn" type="button" disabled>
+        Оформити · <span id="mobile-cart-total">0 ₴</span>
+      </button>
     </div>
   </div>
 

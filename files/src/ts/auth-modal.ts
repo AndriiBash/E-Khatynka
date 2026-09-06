@@ -130,6 +130,16 @@ function initRegisterForm(): void {
   const form = document.getElementById("modal-register-form") as HTMLFormElement | null;
   if (!form) return;
 
+  // Обмеження по довжині (maxlength в HTML) саме по собі не заважає
+  // ввести літери чи зайві символи в межах ліміту — тут прибираємо все,
+  // що не є цифрою чи "+" на самому початку, одразу під час набору.
+  const phoneInput = document.getElementById("modal-register-phone") as HTMLInputElement | null;
+  phoneInput?.addEventListener("input", () => {
+    const hasLeadingPlus = phoneInput.value.startsWith("+");
+    const digitsOnly = phoneInput.value.replace(/\D/g, "");
+    phoneInput.value = (hasLeadingPlus ? "+" : "") + digitsOnly;
+  });
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     void (async () => {

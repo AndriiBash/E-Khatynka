@@ -80,58 +80,224 @@
   gap: var(--space-4);
 }
 
+.products-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-7) 0;
+  font-size: var(--fs-md);
+}
+
+/* ---- Скелетони каталогу на час "завантаження" (див. catalog.ts) ---- */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton--image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.skeleton--line {
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton--price {
+  width: 45%;
+}
+
+.skeleton--name {
+  width: 80%;
+  margin-bottom: 0;
+}
+
+.product-card--skeleton {
+  cursor: default;
+}
+
 .product-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  text-align: left;
   background: var(--color-surface);
   border-radius: var(--radius-md);
-  padding: var(--space-5) var(--space-3) var(--space-4);
+  overflow: hidden;
   box-shadow: var(--shadow-card);
+  /* Уся картка клікабельна (відкриває сторінку товару) — курсор одразу
+     дає це зрозуміти. Кнопки всередині зупиняють клік окремо (див.
+     catalog.ts), щоб не відкривати сторінку разом із додаванням у
+     кошик. */
+  cursor: pointer;
 }
 
-.product-card__image {
-  width: 72px;
-  height: 72px;
+.product-card__image-wrap {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--color-surface-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.25rem;
-  background: var(--color-surface-muted);
-  border-radius: 50%;
-  margin-bottom: var(--space-3);
+  overflow: hidden;
 }
 
-.product-card__name {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  margin-bottom: var(--space-1);
-  min-height: 2.6em;
+.product-card__image {
+  font-size: 4.5rem;
+  line-height: 1;
+}
+
+.product-card__info {
+  padding: var(--space-3) var(--space-3) var(--space-4);
 }
 
 .product-card__price {
   font-size: var(--fs-base);
   font-weight: 700;
   color: var(--color-accent-dark);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
 }
 
-.product-card__add {
-  width: 100%;
-  height: 36px;
+.product-card__name {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* "+"/степпер — маленька плаваюча пігулка в кутку фото, як у
+   референсах (Яндекс Лавка/Їжа). Обидва лежать в одній точці прив'язки
+   (правий нижній кут), щоб плавно змінювати один одного через
+   opacity/scale, без стрибків розкладки. */
+.product-card__control {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+}
+
+.product-card__plus,
+.product-card__stepper {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.product-card__plus.is-hidden,
+.product-card__stepper.is-hidden {
+  opacity: 0;
+  transform: scale(0.7);
+  pointer-events: none;
+}
+
+.product-card__plus {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-accent-dark);
+  box-shadow: 0 4px 10px rgba(43, 29, 20, 0.18);
+}
+
+.product-card__plus svg {
+  width: 20px;
+  height: 20px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .product-card__add:hover {
+  .product-card__plus:hover {
     background: var(--color-accent);
     color: #fff;
+  }
+}
+
+.product-card__stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 10px rgba(43, 29, 20, 0.18);
+  white-space: nowrap;
+}
+
+.product-card__stepper button {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--fs-md);
+  line-height: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card__stepper button:hover {
+    background: var(--color-border);
+  }
+}
+
+.product-card__qty {
+  min-width: 14px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+/* Мобілка — трохи більше, там же пальцем, а не курсором. */
+@media (max-width: 640px) {
+  .product-card__plus,
+  .product-card__stepper {
+    height: 44px;
+  }
+
+  .product-card__plus {
+    width: 44px;
+  }
+
+  .product-card__plus svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .product-card__stepper button {
+    width: 30px;
+    height: 30px;
+    font-size: var(--fs-lg);
+  }
+
+  .product-card__qty {
+    font-size: var(--fs-md);
   }
 }
 
@@ -145,9 +311,6 @@
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
-  /* Зовнішня тінь — картка "піднята" над фоном; менша дозована тінь
-     всередині власного тіла списку (нижче) — та сама картка виглядає
-     ще й трохи "врізаною" зсередини, ефект глибини. */
   box-shadow: var(--shadow-card);
   max-height: calc(100vh - 76px - var(--space-5) * 2);
 }
@@ -182,50 +345,121 @@
   transform: scale(1);
 }
 
+/* Мінімалістично, без "заглиблення" — просто частина тієї самої
+   картки, без окремого фону й внутрішньої тіні. min-height —
+   свідомо трохи більший за порожній стан, щоб перехід "порожньо → 1
+   товар" не виглядав як раптове стискання панелі (весь кошик міняв
+   висоту щоразу, коли товарів ставало мало). */
 .cart-panel__body {
   flex: 1;
   overflow-y: auto;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  padding: var(--space-3);
   margin-bottom: var(--space-4);
-  min-height: 120px;
-  /* Внутрішня тінь — той самий "ефект глибини": вміст кошика виглядає,
-     ніби лежить у невеликому заглибленні, а не просто на плоскому фоні. */
-  box-shadow: inset 0 2px 6px rgba(43, 29, 20, 0.1), inset 0 -1px 2px rgba(43, 29, 20, 0.04);
+  min-height: 200px;
 }
 
 .cart-empty {
-  margin: var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: var(--space-5) 0;
   text-align: center;
   color: var(--color-text-muted);
   font-size: var(--fs-sm);
   line-height: 1.6;
 }
 
+.cart-empty__icon {
+  font-size: 2.25rem;
+  margin-bottom: var(--space-3);
+}
+
 .cart-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
 .cart-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.cart-list li:last-child {
+  border-bottom: none;
+}
+
+/* Поява нового товару — тепер дзеркальна до зникнення: рядок не просто
+   проявляється, а й "розгортається" по висоті (max-height/padding з 0),
+   так само як згортається при видаленні. Раніше тут анімувались лише
+   opacity/transform, а сама висота з'являлась миттєво — через це ефект
+   "розтягування" кошика при додаванні був непомітний, на відміну від
+   видалення. */
+.cart-item--enter {
+  animation: cart-item-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes cart-item-in {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    max-height: 80px;
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+    transform: scale(1);
+  }
+}
+
+/* Зникнення — грається ще ДО того, як товар реально прибирають зі
+   стану кошика (див. bindQtyButtons у catalog.ts), інакше рядок просто
+   різко зникає разом з перерендером усього списку. */
+.cart-item--exit {
+  animation: cart-item-out 0.18s ease forwards;
+}
+
+@keyframes cart-item-out {
+  from {
+    opacity: 1;
+    max-height: 80px;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-color: transparent;
+    transform: scale(0.95);
+  }
+}
+
+.cart-item__image {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--color-surface-muted);
+  border-radius: 50%;
 }
 
 .cart-item__info {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .cart-item__name {
@@ -246,18 +480,25 @@
   align-items: center;
   gap: var(--space-2);
   flex-shrink: 0;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 700;
 }
 
+.cart-item__qty span {
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Кнопки степпера в кошику — збільшені (раніше 24px губились, особливо
+   на мобілці), тепер зручно тицяти пальцем. */
 .cart-item__qty button {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 50%;
   background: var(--color-surface-muted);
   color: var(--color-text);
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -270,18 +511,42 @@
   }
 }
 
-.cart-panel__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
+@media (max-width: 640px) {
+  .cart-item__qty button {
+    width: 36px;
+    height: 36px;
+    font-size: var(--fs-lg);
+  }
 }
 
-.cart-panel__total {
-  font-size: var(--fs-sm);
+/* Спільна кнопка "Оформити · X грн" — розтягнута на всю ширину кошика,
+   ціна написана прямо всередині кнопки замість окремого рядка поруч. */
+.cart-panel__checkout {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--fs-base);
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.cart-panel__checkout:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cart-panel__checkout:not(:disabled):hover {
+    background: var(--color-accent-dark);
+  }
 }
 
 /* ---- Мобільна адаптація: одна колонка, категорії — рядок фішок
@@ -310,8 +575,20 @@
     flex-direction: row;
     overflow-x: auto;
     gap: var(--space-2);
-    padding-bottom: var(--space-1);
+    /* Раніше тут була лише padding-bottom: 4px — цього не вистачало, і
+       тінь активної/наведеної кнопки (box-shadow) обрізалась по краях
+       контейнера, бо overflow-x:auto заодно клипає й вертикальний
+       overflow. Додаємо запас з усіх боків під саму тінь. */
+    padding: var(--space-2) var(--space-1) var(--space-3);
     -webkit-overflow-scrolling: touch;
+    /* Ховаємо смугу прокрутки — тут вона суто заважає, ряд категорій і
+       так очевидно гортається пальцем. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .categories-list::-webkit-scrollbar {
+    display: none;
   }
 
   .categories__item {
@@ -319,7 +596,10 @@
     width: auto;
     white-space: nowrap;
     background: var(--color-surface);
-    box-shadow: var(--shadow-card);
+    /* Менший, компактніший радіус, ніж стандартна --shadow-card — та
+       була задумана для великих карток, тут же навіть з доданим
+       padding вище все одно трохи обрізалась по краях контейнера. */
+    box-shadow: 0 2px 6px rgba(43, 29, 20, 0.12);
   }
 
   .categories__item--active {
@@ -428,9 +708,11 @@ body.has-open-user-menu .mobile-cart-button {
 .mobile-cart-sheet__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(43, 29, 20, 0.55);
+  /* Той самий колір/прозорість, що й у .user-menu__backdrop — усі
+     шторки/поповери на сайті мають виглядати як одна візуальна мова. */
+  background: rgba(43, 29, 20, 0.45);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .mobile-cart-sheet--open .mobile-cart-sheet__backdrop {
@@ -449,13 +731,36 @@ body.has-open-user-menu .mobile-cart-button {
   background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: var(--space-3) var(--space-5) var(--space-5);
-  box-shadow: 0 -10px 40px rgba(43, 29, 20, 0.25);
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+  /* Та сама тінь, що й у .user-menu__dropdown на мобілці — узгоджено з
+     рештою поповерів сайту. */
+  box-shadow: 0 -12px 28px rgba(43, 29, 20, 0.2);
   transform: translateY(100%);
-  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.25s ease;
 }
 
 .mobile-cart-sheet--open .mobile-cart-sheet__panel {
   transform: translateY(0);
+}
+
+/* Поки тягнемо за ручку — без переходу, щоб панель йшла точно за
+   пальцем, а не з затримкою transition. */
+.mobile-cart-sheet__panel.is-dragging {
+  transition: none;
+}
+
+/* Реальна область дотику для свайпу — значно більша за саму видиму
+   смужку (40×4px), яку майже неможливо влучити пальцем. Сама смужка
+   лишається тонкою тільки візуально. */
+.mobile-cart-sheet__handle-hit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 28px;
+  margin-bottom: var(--space-2);
+  flex-shrink: 0;
+  touch-action: none;
 }
 
 .mobile-cart-sheet__handle {
@@ -463,7 +768,6 @@ body.has-open-user-menu .mobile-cart-button {
   height: 4px;
   border-radius: 999px;
   background: var(--color-border);
-  margin: 0 auto var(--space-4);
   flex-shrink: 0;
 }
 
@@ -500,26 +804,15 @@ body.has-open-user-menu .mobile-cart-button {
 .mobile-cart-sheet__body {
   flex: 1;
   overflow-y: auto;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  padding: var(--space-3);
-  box-shadow: inset 0 2px 6px rgba(43, 29, 20, 0.1), inset 0 -1px 2px rgba(43, 29, 20, 0.04);
+  margin-bottom: var(--space-4);
+  /* Той самий прийом, що й у .cart-panel__body — щоб перехід
+     "порожньо → 1 товар" не сприймався як раптове стискання шторки. */
+  min-height: 160px;
 }
 
-.mobile-cart-sheet__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-4);
+.mobile-cart-sheet .cart-panel__checkout {
+  margin-top: var(--space-1);
   flex-shrink: 0;
-}
-
-.mobile-cart-sheet__total {
-  font-size: var(--fs-sm);
-  font-weight: 700;
 }
 
 /* ==============================

@@ -106,6 +106,7 @@ app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 // було — 404. Віддаємо той самий файл.
 app.get("/index.html", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/404.html", (req, res) => res.sendFile(path.join(__dirname, "404.html")));
+app.get("/product.html", (req, res) => res.sendFile(path.join(__dirname, "product.html")));
 app.use("/dist", express.static(path.join(__dirname, "dist")));
 app.use("/src/css", express.static(path.join(__dirname, "src", "css")));
 app.use("/assets", express.static(path.join(__dirname, "assets")));
