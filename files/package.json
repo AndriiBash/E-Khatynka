@@ -1,0 +1,25 @@
+{
+  "name": "ehatynka",
+  "version": "1.0.0",
+  "description": "Є-Хатинка — фронтенд + локальний backend (Express + node:sqlite)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node server.js",
+    "dev": "npm run build && npm run start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.19.2",
+    "cookie-parser": "^1.4.6"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

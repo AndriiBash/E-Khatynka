@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "Bundler",
+    "outDir": "dist/js",
+    "rootDir": "src/ts",
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "sourceMap": false,
+    "lib": ["ES2020", "DOM"]
+  },
+  "include": ["src/ts/**/*.ts"]
+}
