@@ -54,6 +54,11 @@ export function removeFromCart(productId: string): void {
   notify();
 }
 
+export function clearCart(): void {
+  items = [];
+  notify();
+}
+
 export function setQty(productId: string, qty: number): void {
   if (qty <= 0) {
     removeFromCart(productId);

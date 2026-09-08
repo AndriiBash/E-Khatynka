@@ -6,6 +6,11 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Потрібно як contain-блок для .is-docked нижче (main.ts) — коли
+     плаваючі кнопки пошуку/кошика на мобілці "докаються" перед
+     футером, вони стають position:absolute саме відносно цього блоку,
+     а не всього документа. */
+  position: relative;
 }
 
 .stub__topbar {
@@ -182,7 +187,9 @@
   height: 44px;
   padding: 0 var(--space-2) 0 var(--space-4);
   border: none;
-  border-radius: 999px;
+  /* Та сама мова скруглень, що й у "Увійти"/"Оформити" — це якраз та
+     кнопка, яку не встигли поправити минулого разу. */
+  border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
   font-family: inherit;
   font-size: var(--fs-sm);
@@ -400,6 +407,13 @@
   display: none;
 }
 
+/* Те саме "докування" перед футером, що й для кнопки кошика (див.
+   .mobile-cart-button.is-docked у layout.css) — той самий клас,
+   керується тим самим IntersectionObserver у main.ts. */
+.mobile-search.is-docked {
+  position: absolute;
+}
+
 /* Меню користувача відкрите — ховаємо плаваючу кнопку пошуку повністю,
    щоб вона точно не наїжджала на шторку меню (JS також закриває саме
    поле, якщо воно було розкрите — див. main.ts). */
@@ -437,7 +451,9 @@ body.has-open-user-menu .mobile-search {
     flex: 0 0 0;
     min-width: 0;
     height: 56px;
-    border-radius: 999px;
+    /* Узгоджено з рештою кнопок сайту (Увійти/Оформити) — раніше тут
+       була пігулка (999px), випадала з єдиної мови скруглень. */
+    border-radius: var(--radius-md);
     background: var(--color-surface);
     box-shadow: 0 10px 26px rgba(43, 29, 20, 0.2);
     overflow: hidden;
@@ -527,7 +543,7 @@ body.has-open-user-menu .mobile-search {
     flex-shrink: 0;
     width: 0;
     height: 56px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
     border: none;
     background: #4A3B7C;
     color: #fff;
@@ -559,13 +575,13 @@ body.has-open-user-menu .mobile-search {
     flex-shrink: 0;
   }
 
-  /* --- toggle: завжди власне коло — лупа в закритому, "закрити" у відкритому --- */
+  /* --- toggle: та сама мова скруглень, лупа в закритому, "закрити" у відкритому --- */
   .mobile-search__toggle {
     position: relative;
     flex-shrink: 0;
     width: 56px;
     height: 56px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
     border: none;
     background: var(--color-accent);
     box-shadow: 0 8px 20px rgba(43, 29, 20, 0.25);
@@ -620,14 +636,26 @@ body.has-open-user-menu .mobile-search {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: none;
+  /* visibility, а не display:none — інакше закриття не могло б
+     анімуватись зовсім (display не транзишиниться). Той самий підхід,
+     що вже був у мобільної шторки кошика й меню користувача. */
+  visibility: hidden;
+  display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-5);
 }
 
+/* Модалка підтвердження очищення кошика використовує ті самі
+   auth-modal класи (єдиний стиль попапів), але відкривається ПОВЕРХ
+   уже відкритої мобільної шторки кошика (z-index: 110) — тож їй
+   потрібен вищий z-index, інакше вона ховається під шторкою. */
+#clear-cart-modal {
+  z-index: 120;
+}
+
 .auth-modal--open {
-  display: flex;
+  visibility: visible;
 }
 
 .auth-modal__backdrop {
@@ -636,7 +664,12 @@ body.has-open-user-menu .mobile-search {
   /* Той самий тон, що й в інших поповерах сайту (меню користувача,
      кошик на мобілці) — єдина візуальна мова затемнення фону. */
   background: rgba(43, 29, 20, 0.45);
-  animation: auth-modal-fade-in 0.18s ease;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.auth-modal--open .auth-modal__backdrop {
+  opacity: 1;
 }
 
 .auth-modal__dialog {
@@ -650,27 +683,14 @@ body.has-open-user-menu .mobile-search {
   border-radius: var(--radius-lg);
   box-shadow: 0 24px 60px rgba(43, 29, 20, 0.35);
   padding: var(--space-6);
-  animation: auth-modal-pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@keyframes auth-modal-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes auth-modal-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.auth-modal--open .auth-modal__dialog {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .auth-modal__close {
@@ -701,8 +721,12 @@ body.has-open-user-menu .mobile-search {
   }
 }
 
-/* padding-right, щоб заголовок не наїжджав на хрестик закриття */
-.auth-modal__panel h2 {
+/* padding-right, щоб заголовок не наїжджав на хрестик закриття —
+   стосується БУДЬ-ЯКОГО заголовка в діалозі (раніше правило діяло лише
+   на .auth-modal__panel h2, тобто вхід/реєстрацію, а не на прості
+   модалки підтвердження на кшталт "Очистити кошик?"/"Увійдіть в
+   акаунт", де h2 лежить прямо в .auth-modal__dialog). */
+.auth-modal__dialog h2 {
   font-size: var(--fs-xl);
   margin-bottom: var(--space-2);
   padding-right: var(--space-6);
@@ -721,6 +745,17 @@ body.has-open-user-menu .mobile-search {
   text-align: center;
 }
 
+.clear-cart-modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.clear-cart-modal__actions .btn {
+  flex: 1;
+  height: 48px;
+}
+
 .auth-modal__link {
   background: none;
   border: none;
@@ -733,12 +768,19 @@ body.has-open-user-menu .mobile-search {
   text-underline-offset: 2px;
 }
 
-@media (max-width: 480px) {
+/* На мобілці — той самий центрований діалог, що й на десктопі (лише
+   вужчі відступи та трохи менший вертикальний запас під клавіатуру),
+   з тим самим fade+scale переходом з .auth-modal__dialog вище. */
+@media (max-width: 640px) {
   .auth-modal {
-    padding: var(--space-3);
+    padding: var(--space-4);
   }
 
   .auth-modal__dialog {
+    max-width: 420px;
+    max-height: 85vh;
+    max-height: 85dvh;
     padding: var(--space-5);
+    padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   }
 }

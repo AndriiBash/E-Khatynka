@@ -3,6 +3,7 @@ import {
   addToCart,
   subscribeCart,
   setQty,
+  clearCart,
   getCartItems,
   getCartTotal,
   getCartCount,
@@ -67,7 +68,7 @@ function productCardHtml(p: Product): string {
 // Час, за який встигає доіграти CSS-анімація зникнення рядка (нижче,
 // .cart-item--exit) — доки вона не дограє, реальне видалення зі стану
 // кошика (і, відповідно, перерендер без цього рядка) відкладаємо.
-const EXIT_ANIMATION_MS = 180;
+const EXIT_ANIMATION_MS = 200;
 
 // Спільна логіка "спочатку програти анімацію зникнення рядка в кошику,
 // і лише потім реально прибрати товар зі стану" — використовується як
@@ -180,8 +181,15 @@ function renderProducts(): void {
 // Викликається з полів пошуку в шапці (десктоп) і знизу (мобілка) —
 // див. setupSearchInputs у main.ts.
 export function setSearchQuery(query: string): void {
+  const wasEmpty = searchQuery.trim().length === 0;
   searchQuery = query;
   renderProducts();
+  // Скролимо нагору тільки в момент, коли пошук ЗАПОЧАТКОВУЄТЬСЯ
+  // (порожньо → щось), а не на кожен символ — інакше сторінка смикалась
+  // би при кожному натисканні клавіші, поки людина ще друкує запит.
+  if (wasEmpty && query.trim().length > 0) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 }
 
 function cartItemHtml(item: CartItem, isNew: boolean): string {
@@ -229,7 +237,7 @@ function bindQtyButtons(container: HTMLElement, items: CartItem[]): void {
 function renderCartBody(container: HTMLElement, items: CartItem[], newIds: Set<string>): void {
   container.innerHTML = items.length
     ? `<ul class="cart-list">${items.map((i) => cartItemHtml(i, newIds.has(i.productId))).join("")}</ul>`
-    : `<div class="cart-empty"><span class="cart-empty__icon" aria-hidden="true">🧺</span>Кошик порожній.<br />Додайте щось смачне 🙂</div>`;
+    : `<div class="cart-empty"><img class="cart-empty__icon" src="assets/images/empty-cart.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />Кошик порожній.<br />Додайте щось смачне 🙂</div>`;
   bindQtyButtons(container, items);
 }
 
@@ -238,11 +246,30 @@ function renderCartBody(container: HTMLElement, items: CartItem[], newIds: Set<s
 // щойно (і програти для них анімацію появи), а які просто змінили
 // кількість (і не блимати зайвий раз).
 let previousCartIds = new Set<string>();
+let previousCartHadItems: boolean | null = null;
+
+// Плавна зміна тексту кнопки "Оформити"/"Додайте щось" — короткий
+// провал прозорості, але ЛИШЕ коли міняється сам РЕЖИМ (порожньо ↔ є
+// товари), а не при кожній зміні суми всередині одного режиму —
+// інакше кнопка "блимала" б на кожен "+"/"−" в кошику.
+function setCheckoutText(btn: HTMLButtonElement, text: string, modeChanged: boolean): void {
+  if (btn.textContent === text) return;
+  if (!modeChanged) {
+    btn.textContent = text;
+    return;
+  }
+  btn.classList.add("is-updating");
+  window.setTimeout(() => {
+    btn.textContent = text;
+    btn.classList.remove("is-updating");
+  }, 120);
+}
 
 function renderCart(items: CartItem[]): void {
   syncProductControls(items);
 
   const newIds = new Set(items.map((i) => i.productId).filter((id) => !previousCartIds.has(id)));
+  const modeChanged = previousCartHadItems !== null && previousCartHadItems !== (items.length > 0);
 
   const count = getCartCount();
   document.querySelectorAll<HTMLElement>("[data-cart-count]").forEach((el) => {
@@ -251,22 +278,27 @@ function renderCart(items: CartItem[]): void {
   });
 
   const totalText = `${getCartTotal()} ${CURRENCY}`;
+  // Поки кошик порожній — без "0 ₴" на кнопці, це виглядало дивно.
+  const checkoutText = items.length ? `Оформити · ${totalText}` : "Додайте щось";
 
   const panelBody = document.getElementById("cart-panel-body");
   if (panelBody) renderCartBody(panelBody, items, newIds);
-  const panelTotal = document.getElementById("cart-total");
-  if (panelTotal) panelTotal.textContent = totalText;
   const panelCheckout = document.getElementById("cart-checkout-btn") as HTMLButtonElement | null;
-  if (panelCheckout) panelCheckout.disabled = items.length === 0;
+  if (panelCheckout) {
+    setCheckoutText(panelCheckout, checkoutText, modeChanged);
+    panelCheckout.disabled = items.length === 0;
+  }
 
   const mobileBody = document.getElementById("mobile-cart-body");
   if (mobileBody) renderCartBody(mobileBody, items, newIds);
-  const mobileTotal = document.getElementById("mobile-cart-total");
-  if (mobileTotal) mobileTotal.textContent = totalText;
   const mobileCheckout = document.getElementById("mobile-cart-checkout-btn") as HTMLButtonElement | null;
-  if (mobileCheckout) mobileCheckout.disabled = items.length === 0;
+  if (mobileCheckout) {
+    setCheckoutText(mobileCheckout, checkoutText, modeChanged);
+    mobileCheckout.disabled = items.length === 0;
+  }
 
   previousCartIds = new Set(items.map((i) => i.productId));
+  previousCartHadItems = items.length > 0;
 }
 
 // ---- Мобільна шторка кошика (той самий overlay-патерн, що й у
@@ -290,8 +322,15 @@ function closeMobileCartSheet(): void {
   if (!sheet) return;
   sheet.classList.remove("mobile-cart-sheet--open");
   sheet.setAttribute("aria-hidden", "true");
-  unlockScroll();
   document.removeEventListener("keydown", onSheetKeydown);
+  // unlockScroll() синхронно повертає body в звичайний скрол —
+  // ЯКЩО зробити це одразу, фон "стрибає" назад у свою позицію прямо
+  // під час того, як сама шторка ще 0.25с їде вниз (transform), і це
+  // виглядало як смикання/дрож при закритті. Чекаємо, доки анімація
+  // закриття справді дограє.
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 260);
 }
 
 function setupMobileCartSheet(): void {
@@ -338,6 +377,50 @@ function renderProductSkeletons(): void {
   grid.innerHTML = Array.from({ length: SKELETON_COUNT }, skeletonCardHtml).join("");
 }
 
+// ---- Підтвердження очищення кошика — та сама модалка (auth-modal
+// класи), що й вхід/реєстрація, тільки з іншим вмістом: усвідомлено
+// перевикористовуємо готовий візуальний патерн замість винаходу
+// нового попапу. ----
+
+function onClearCartModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeClearCartModal();
+}
+
+function openClearCartModal(): void {
+  const modal = document.getElementById("clear-cart-modal");
+  if (!modal) return;
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onClearCartModalKeydown);
+}
+
+function closeClearCartModal(): void {
+  const modal = document.getElementById("clear-cart-modal");
+  if (!modal) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onClearCartModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function setupClearCartModal(): void {
+  // Кнопка "Очистити" є і в десктопній панелі, і в мобільній шторці —
+  // обидві відкривають одну й ту саму модалку підтвердження.
+  document.getElementById("cart-clear-btn")?.addEventListener("click", openClearCartModal);
+  document.getElementById("mobile-cart-clear-btn")?.addEventListener("click", openClearCartModal);
+
+  document.getElementById("clear-cart-modal-close")?.addEventListener("click", closeClearCartModal);
+  document.getElementById("clear-cart-modal-backdrop")?.addEventListener("click", closeClearCartModal);
+  document.getElementById("clear-cart-cancel")?.addEventListener("click", closeClearCartModal);
+  document.getElementById("clear-cart-confirm")?.addEventListener("click", () => {
+    clearCart();
+    closeClearCartModal();
+  });
+}
+
 export function setupCatalog(): void {
   renderCategories();
   // Спочатку — скелетони з "переливом" (як у YouTube/Яндекс Лавці), і
@@ -348,4 +431,5 @@ export function setupCatalog(): void {
   subscribeCart(renderCart);
   setupMobileCartSheet();
   setupSheetSwipeToClose();
+  setupClearCartModal();
 }

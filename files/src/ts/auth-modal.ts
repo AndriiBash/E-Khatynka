@@ -79,8 +79,13 @@ export function closeAuthModal(): void {
 
   modal.classList.remove("auth-modal--open");
   modal.setAttribute("aria-hidden", "true");
-  unlockScroll();
   document.removeEventListener("keydown", onKeydown);
+  // Той самий принцип, що й у мобільній шторці кошика (catalog.ts) —
+  // не смикати фон назад у скрол, поки сама модалка ще візуально
+  // згасає (~0.2s).
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
 }
 
 function initLoginForm(): void {
@@ -130,14 +135,33 @@ function initRegisterForm(): void {
   const form = document.getElementById("modal-register-form") as HTMLFormElement | null;
   if (!form) return;
 
-  // Обмеження по довжині (maxlength в HTML) саме по собі не заважає
-  // ввести літери чи зайві символи в межах ліміту — тут прибираємо все,
-  // що не є цифрою чи "+" на самому початку, одразу під час набору.
+  // Маска номера: фіксований префікс "+380 " + згруповані цифри
+  // "XX XXX XX XX" (9 цифр після коду країни — рівно стільки в
+  // українському мобільному номері). Разом це завжди відповідає
+  // компактному "+380XXXXXXXXX" (13 символів), просто зі зручними
+  // проміжками для читання.
+  const PHONE_PREFIX = "+380";
+
+  function formatPhoneValue(raw: string): string {
+    let digits = raw.replace(/\D/g, "");
+    if (digits.startsWith("380")) digits = digits.slice(3);
+    digits = digits.slice(0, 9);
+    if (digits.length === 0) return `${PHONE_PREFIX} `;
+    const parts: string[] = [digits.slice(0, 2)];
+    if (digits.length > 2) parts.push(digits.slice(2, 5));
+    if (digits.length > 5) parts.push(digits.slice(5, 7));
+    if (digits.length > 7) parts.push(digits.slice(7, 9));
+    return `${PHONE_PREFIX} ${parts.join(" ")}`;
+  }
+
   const phoneInput = document.getElementById("modal-register-phone") as HTMLInputElement | null;
+
+  phoneInput?.addEventListener("focus", () => {
+    if (!phoneInput.value) phoneInput.value = `${PHONE_PREFIX} `;
+  });
+
   phoneInput?.addEventListener("input", () => {
-    const hasLeadingPlus = phoneInput.value.startsWith("+");
-    const digitsOnly = phoneInput.value.replace(/\D/g, "");
-    phoneInput.value = (hasLeadingPlus ? "+" : "") + digitsOnly;
+    phoneInput.value = formatPhoneValue(phoneInput.value);
   });
 
   form.addEventListener("submit", (e) => {
@@ -190,7 +214,12 @@ function initRegisterForm(): void {
       const submitBtn = form.querySelector<HTMLButtonElement>("button[type=submit]");
       if (submitBtn) submitBtn.disabled = true;
 
-      const result = await registerUser({ fullName, email, phone, password });
+      const result = await registerUser({
+        fullName,
+        email,
+        phone: phone.replace(/\s/g, ""),
+        password,
+      });
 
       if (submitBtn) submitBtn.disabled = false;
 

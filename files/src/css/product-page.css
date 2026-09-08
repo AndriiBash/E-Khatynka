@@ -36,6 +36,10 @@
   align-items: start;
 }
 
+.product-page__image-wrap {
+  position: relative;
+}
+
 .product-page__image {
   aspect-ratio: 1 / 1;
   background: var(--color-surface-muted);
@@ -46,12 +50,50 @@
   font-size: 7rem;
 }
 
+.product-page__favorite {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  box-shadow: 0 4px 10px rgba(43, 29, 20, 0.18);
+}
+
+.product-page__favorite svg {
+  width: 22px;
+  height: 22px;
+}
+
+.product-page__favorite.is-active {
+  color: var(--color-error);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-page__favorite:hover {
+    color: var(--color-error);
+  }
+}
+
+/* Рядок назви + керування завжди в один рядок, навіть на мобілці —
+   керування "примагнічене" праворуч і НЕ переїжджає на новий рядок
+   під назвою (так було раніше й виглядало розхитано). */
 .product-page__top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.product-page__titles {
+  min-width: 0;
 }
 
 .product-page__name {
@@ -64,44 +106,67 @@
   font-size: var(--fs-sm);
 }
 
+/* Ключове проти "дригання" назви (див. попередні скріншоти): контейнер
+   керування має ФІКСОВАНУ ширину незалежно від того, показаний зараз
+   "+" чи степпер — а не змінює власну ширину, стискаючи назву товару.
+   "+" і степпер лежать один на одному (той самий прийом, що й у
+   картках каталогу) і просто плавно проявляються/зникають. */
 .product-page__control {
   position: relative;
+  width: 112px;
+  height: 40px;
   flex-shrink: 0;
-  height: 48px;
+}
+
+.product-page__plus,
+.product-page__stepper {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.product-page__plus.is-hidden,
+.product-page__stepper.is-hidden {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+
+.product-page__plus {
   display: flex;
   align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
 }
 
-.product-page__add {
-  height: 48px;
-  padding: 0 var(--space-5);
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-  transition: opacity 0.18s ease, transform 0.18s ease, background 0.12s ease;
+.product-page__plus svg {
+  width: 20px;
+  height: 20px;
 }
 
-.product-page__add.is-hidden,
-.product-page__stepper.is-hidden {
-  position: absolute;
-  opacity: 0;
-  transform: scale(0.94);
-  pointer-events: none;
+@media (hover: hover) and (pointer: fine) {
+  .product-page__plus:hover {
+    background: var(--color-accent-dark);
+  }
 }
 
 .product-page__stepper {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  height: 48px;
-  padding: 0 var(--space-3);
+  justify-content: space-between;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
-  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .product-page__stepper button {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -122,10 +187,17 @@
 }
 
 .product-page__stepper span {
-  min-width: 16px;
+  min-width: 14px;
   text-align: center;
-  font-size: var(--fs-base);
+  font-size: var(--fs-sm);
   font-weight: 700;
+}
+
+.product-page__price {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  margin-bottom: var(--space-5);
 }
 
 .product-page__description {
@@ -158,6 +230,90 @@
   color: var(--color-text-muted);
 }
 
+/* ---- Скелетон "завантаження" — той самий переливчастий .skeleton із
+   tokens.css, розкладений під структуру цієї сторінки: фото зліва,
+   заголовок/вага/керування та смуги тексту справа. ---- */
+
+.product-page__skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 380px) 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.product-page__skeleton .skeleton--image {
+  border-radius: var(--radius-lg);
+}
+
+.product-page__skeleton-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.product-page__skeleton-title {
+  height: 22px;
+  width: 70%;
+  border-radius: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.product-page__skeleton-weight {
+  height: 14px;
+  width: 30%;
+  border-radius: 4px;
+}
+
+.product-page__skeleton-control {
+  width: 112px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+
+.product-page__skeleton-price {
+  height: 22px;
+  width: 25%;
+  border-radius: 4px;
+  margin-bottom: var(--space-5);
+}
+
+.product-page__skeleton-desc-line {
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.product-page__skeleton-desc-line:last-of-type {
+  width: 60%;
+  margin-bottom: var(--space-5);
+}
+
+.product-page__skeleton-spec {
+  margin-bottom: var(--space-4);
+}
+
+.product-page__skeleton-spec-label {
+  height: 12px;
+  width: 40%;
+  border-radius: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.product-page__skeleton-spec-value {
+  height: 16px;
+  width: 55%;
+  border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+  .product-page__skeleton {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .product-page__layout {
     grid-template-columns: 1fr;
@@ -167,12 +323,6 @@
     font-size: 5rem;
   }
 
-  .product-page__top {
-    flex-direction: column;
-  }
-
-  .product-page__control,
-  .product-page__add {
-    width: 100%;
-  }
+  /* НЕ ставимо flex-direction:column тут навмисно — керування
+     лишається праворуч і на мобілці, як і просили. */
 }

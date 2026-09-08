@@ -5,6 +5,30 @@ import { initPreloader, hidePreloader } from "./preloader.js";
 import { setupSwipeToClose } from "./swipe-sheet.js";
 
 // ==============================
+// "Докування" плаваючих кнопок пошуку/кошика перед футером (мобілка).
+// Спільний стан між setupFloatingButtonsDock (стежить за футером) і
+// setupMobileSearch (має право тимчасово заборонити докування, поки
+// поле пошуку відкрите — інакше position:absolute конфліктує з
+// position:fixed-логікою підйому над клавіатурою, і поле "телепортується").
+// ==============================
+let isFooterVisible = false;
+let applyFloatingDock: () => void = () => {};
+
+// ==============================
+// Поля пошуку — два різних <input> (десктопне в шапці, мобільне знизу),
+// які фізично завжди обидва в DOM (просто приховані/показані через
+// медіа-запити) — тож при зміні ширини вікна раніше одне лишалось
+// порожнім, а інше — з уже введеним текстом. Синхронізуємо значення
+// між ними на кожен ввід.
+// ==============================
+function syncSearchInputs(value: string, exceptId: string): void {
+  const desktop = document.getElementById("desktop-search-input") as HTMLInputElement | null;
+  const mobile = document.getElementById("mobile-search-input") as HTMLInputElement | null;
+  if (desktop && desktop.id !== exceptId) desktop.value = value;
+  if (mobile && mobile.id !== exceptId) mobile.value = value;
+}
+
+// ==============================
 // Головна сторінка — поки заглушка.
 // Показує кнопку "Увійти" або привітання + "Вийти" залежно від сесії.
 // ==============================
@@ -182,6 +206,11 @@ function setupMobileSearch(): void {
 
   const open = (): void => {
     wrap.classList.add("mobile-search--open");
+    // На випадок, якщо кнопку відкрили, вже будучи докованою внизу
+    // біля футера — примусово знімаємо .is-docked і повертаємось до
+    // fixed, щоб логіка підйому над клавіатурою нижче рахувала
+    // позицію відносно вьюпорту, а не .stub.
+    wrap.classList.remove("is-docked");
     toggle.setAttribute("aria-expanded", "true");
     toggle.setAttribute("aria-label", "Закрити пошук");
     openedAt = Date.now();
@@ -232,6 +261,10 @@ function setupMobileSearch(): void {
       clearTimeout(settleTimer);
       settleTimer = undefined;
     }
+    // Тепер, коли поле знову position:fixed за замовчуванням, можна
+    // безпечно застосувати актуальний стан докування (раптом футер
+    // весь цей час був видимий).
+    applyFloatingDock();
   };
 
   toggle.addEventListener("click", (e) => {
@@ -271,6 +304,7 @@ function setupMobileSearch(): void {
   // стоїть для вигляду.
   input.addEventListener("input", () => {
     if (isOpen()) reassertLock();
+    syncSearchInputs(input.value, input.id);
     setSearchQuery(input.value);
   });
 
@@ -280,6 +314,7 @@ function setupMobileSearch(): void {
   clearTextBtn?.addEventListener("click", () => {
     input.value = "";
     input.focus();
+    syncSearchInputs("", input.id);
     setSearchQuery("");
   });
 
@@ -325,12 +360,14 @@ function setupDesktopSearchClear(): void {
   if (!input || !clearBtn) return;
 
   input.addEventListener("input", () => {
+    syncSearchInputs(input.value, input.id);
     setSearchQuery(input.value);
   });
 
   clearBtn.addEventListener("click", () => {
     input.value = "";
     input.focus();
+    syncSearchInputs("", input.id);
     setSearchQuery("");
   });
 }
@@ -411,6 +448,41 @@ async function render(): Promise<void> {
   }
 }
 
+function setupFloatingButtonsDock(): void {
+  // Плаваючі кнопки пошуку й кошика на мобілці — position:fixed, тож
+  // за замовчуванням завжди прибиті до вьюпорту, навіть коли доскролив
+  // до самого футера, і наповзають на нього. IntersectionObserver каже
+  // нам, коли футер потрапляє у видиму область — саме тоді перемикаємо
+  // клас .is-docked (position:absolute відносно .stub, див. CSS), і
+  // кнопки "зупиняються" рівно на межі з футером.
+  const footer = document.querySelector(".site-footer");
+  const search = document.getElementById("mobile-search");
+  const cartBtn = document.getElementById("mobile-cart-button");
+  if (!footer || (!search && !cartBtn)) return;
+
+  applyFloatingDock = (): void => {
+    // Поки поле пошуку відкрите (клавіатура на екрані, JS вручну керує
+    // wrap.style.bottom для підйому над клавіатурою) — НЕ чіпаємо його
+    // position. Перемикання fixed→absolute саме в цей момент ламало
+    // всю математику підйому над клавіатурою (звідси й "телепортація"
+    // поля вгору екрана при пошуку внизу довгої відфільтрованої
+    // сторінки).
+    if (!search?.classList.contains("mobile-search--open")) {
+      search?.classList.toggle("is-docked", isFooterVisible);
+    }
+    cartBtn?.classList.toggle("is-docked", isFooterVisible);
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      isFooterVisible = entries[0]?.isIntersecting ?? false;
+      applyFloatingDock();
+    },
+    { threshold: 0 }
+  );
+  observer.observe(footer);
+}
+
 initPreloader();
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -427,6 +499,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupMobileSearch();
   setupDesktopSearchClear();
   setupLogoHome();
+  setupFloatingButtonsDock();
   setAuthSuccessHandler(() => {
     void render();
   });

@@ -7,6 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Є-Хатинка</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="src/css/tokens.css" />
@@ -63,10 +64,13 @@
         </section>
 
         <aside class="cart-panel">
-          <h2 class="cart-panel__title">Кошик <span class="cart-panel__count" data-cart-count>0</span></h2>
+          <div class="cart-panel__head">
+            <h2 class="cart-panel__title">Кошик <span class="cart-panel__count" data-cart-count>0</span></h2>
+            <button class="cart-panel__clear" id="cart-clear-btn" type="button">Очистити</button>
+          </div>
           <div class="cart-panel__body" id="cart-panel-body"></div>
           <button class="cart-panel__checkout" id="cart-checkout-btn" type="button" disabled>
-            Оформити · <span id="cart-total">0 ₴</span>
+            Додайте щось
           </button>
         </aside>
       </div>
@@ -145,16 +149,36 @@
       </div>
       <div class="mobile-cart-sheet__header">
         <h2>Кошик</h2>
-        <button class="mobile-cart-sheet__close" id="mobile-cart-sheet-close" type="button" aria-label="Закрити">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
+        <div class="mobile-cart-sheet__header-actions">
+          <button class="cart-panel__clear" id="mobile-cart-clear-btn" type="button">Очистити</button>
+          <button class="mobile-cart-sheet__close" id="mobile-cart-sheet-close" type="button" aria-label="Закрити">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="mobile-cart-sheet__body" id="mobile-cart-body"></div>
       <button class="cart-panel__checkout" id="mobile-cart-checkout-btn" type="button" disabled>
-        Оформити · <span id="mobile-cart-total">0 ₴</span>
+        Додайте щось
       </button>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="clear-cart-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop" id="clear-cart-modal-backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="clear-cart-modal-title">
+      <button class="auth-modal__close" id="clear-cart-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="clear-cart-modal-title">Очистити кошик?</h2>
+      <p class="auth-modal__subtitle">Усі додані товари буде видалено з кошика. Це не можна скасувати.</p>
+      <div class="clear-cart-modal__actions">
+        <button class="btn btn--ghost" id="clear-cart-cancel" type="button">Скасувати</button>
+        <button class="btn btn--danger" id="clear-cart-confirm" type="button">Так, очистити</button>
+      </div>
     </div>
   </div>
 
@@ -211,7 +235,7 @@
 
           <div class="field">
             <label for="modal-register-phone">Телефон</label>
-            <input type="tel" id="modal-register-phone" name="phone" placeholder="+380XXXXXXXXX" autocomplete="tel" inputmode="tel" maxlength="18" />
+            <input type="tel" id="modal-register-phone" name="phone" placeholder="+380 XX XXX XX XX" autocomplete="tel" inputmode="tel" maxlength="17" />
             <span class="field-error" id="modal-register-phone-error"></span>
           </div>
 

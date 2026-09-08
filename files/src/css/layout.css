@@ -88,28 +88,9 @@
   font-size: var(--fs-md);
 }
 
-/* ---- Скелетони каталогу на час "завантаження" (див. catalog.ts) ---- */
-
-.skeleton {
-  position: relative;
-  overflow: hidden;
-  background: var(--color-surface-muted);
-}
-
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
-  animation: skeleton-shimmer 1.4s infinite;
-}
-
-@keyframes skeleton-shimmer {
-  100% {
-    transform: translateX(100%);
-  }
-}
+/* ---- Скелетони каталогу на час "завантаження" (базовий .skeleton і
+   shimmer-анімація переїхали в tokens.css — спільні для всіх сторінок,
+   зокрема й product.html) ---- */
 
 .skeleton--image {
   width: 100%;
@@ -315,12 +296,37 @@
   max-height: calc(100vh - 76px - var(--space-5) * 2);
 }
 
+.cart-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .cart-panel__title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--fs-md);
-  margin-bottom: var(--space-4);
+}
+
+.cart-panel__clear {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cart-panel__clear:hover {
+    color: var(--color-error);
+  }
 }
 
 .cart-panel__count {
@@ -369,7 +375,9 @@
 }
 
 .cart-empty__icon {
-  font-size: 2.25rem;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
   margin-bottom: var(--space-3);
 }
 
@@ -399,7 +407,7 @@
    "розтягування" кошика при додаванні був непомітний, на відміну від
    видалення. */
 .cart-item--enter {
-  animation: cart-item-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: cart-item-in 0.2s ease;
 }
 
 @keyframes cart-item-in {
@@ -423,7 +431,7 @@
    стану кошика (див. bindQtyButtons у catalog.ts), інакше рядок просто
    різко зникає разом з перерендером усього списку. */
 .cart-item--exit {
-  animation: cart-item-out 0.18s ease forwards;
+  animation: cart-item-out 0.2s ease forwards;
 }
 
 @keyframes cart-item-out {
@@ -535,6 +543,20 @@
   justify-content: center;
   gap: var(--space-1);
   flex-shrink: 0;
+  /* Плавна зміна стану (порожньо/є товари → активна/неактивна, колір,
+     текст) замість миттєвого перемикання. */
+  transition: background 0.2s ease, color 0.2s ease, opacity 0.15s ease;
+}
+
+/* Короткий "провал" прозорості в момент зміни тексту кнопки (наприклад
+   "Додайте щось" → "Оформити · 42 ₴") — див. setCheckoutText у
+   catalog.ts. Без цього текст просто миттєво підмінявся б. */
+.cart-panel__checkout.is-updating {
+  opacity: 0.45;
+}
+
+.cart-panel__clear {
+  transition: opacity 0.15s ease;
 }
 
 .cart-panel__checkout:disabled {
@@ -626,6 +648,16 @@
   display: none;
 }
 
+/* "Докування" перед футером — коли футер вже видимий на екрані,
+   перемикаємо з position:fixed (завжди прибитий до вьюпорту) на
+   position:absolute відносно .stub (position:relative у main.css) —
+   тоді кнопка зупиняється рівно на межі з футером і далі скролиться
+   разом зі сторінкою, а не наповзає на футер. Перемикає клас
+   setupFloatingButtonsDock() у main.ts через IntersectionObserver. */
+.mobile-cart-button.is-docked {
+  position: absolute;
+}
+
 body.has-open-user-menu .mobile-cart-button {
   opacity: 0;
   visibility: hidden;
@@ -652,7 +684,7 @@ body.has-open-user-menu .mobile-cart-button {
     bottom: calc(56px + var(--space-5) + var(--space-3));
     width: 56px;
     height: 56px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
     border: none;
     background: var(--color-surface);
     color: var(--color-text);
@@ -777,6 +809,12 @@ body.has-open-user-menu .mobile-cart-button {
   justify-content: space-between;
   margin-bottom: var(--space-4);
   flex-shrink: 0;
+}
+
+.mobile-cart-sheet__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
 .mobile-cart-sheet__header h2 {

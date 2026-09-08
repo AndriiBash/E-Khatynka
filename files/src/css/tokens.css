@@ -41,9 +41,9 @@
   --space-6: 32px;
   --space-7: 48px;
 
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
 
   --shadow-card: 0 1px 2px rgba(43, 29, 20, 0.06), 0 6px 16px rgba(43, 29, 20, 0.05);
 }
@@ -130,6 +130,11 @@ button {
   color: #fff;
 }
 
+.btn--danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .btn--ghost:hover {
     background: var(--color-border);
@@ -137,6 +142,10 @@ button {
 
   .btn--primary-sm:hover {
     background: var(--color-accent-dark);
+  }
+
+  .btn--danger:hover {
+    background: #8f3521;
   }
 }
 
@@ -152,4 +161,32 @@ button {
    всюди, на відміну від main.css/preloader.css/auth.css). */
 .logo-accent {
   color: var(--color-accent);
+}
+
+/* ==============================
+   Скелетони "завантаження" (переливчаста хвиля, як у YouTube/Яндекс
+   Лавці) — базовий механізм тут, у спільному tokens.css, бо
+   використовується і в каталозі (layout.css), і на сторінці товару
+   (product-page.css).
+   ============================== */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

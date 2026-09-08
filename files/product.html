@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Товар – Є-Хатинка</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/auth.css" />
+  <link rel="stylesheet" href="src/css/main.css" />
   <link rel="stylesheet" href="src/css/product-page.css" />
 </head>
 <body>
@@ -16,6 +19,108 @@
       На головну
     </a>
     <div id="product-page-root"></div>
+  </div>
+
+  <div class="auth-modal" id="favorite-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop" id="favorite-modal-backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="favorite-modal-title">
+      <button class="auth-modal__close" id="favorite-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="favorite-modal-title">Все збережемо, лише увійдіть в акаунт</h2>
+      <p class="auth-modal__subtitle">Увійдіть у профіль, щоб додавати товари в обране.</p>
+      <div class="clear-cart-modal__actions">
+        <button class="btn btn--ghost" id="favorite-modal-dismiss" type="button">Може іншим разом</button>
+        <button class="btn btn--primary-sm" id="favorite-modal-login" type="button">Увійти в акаунт</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="auth-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop" id="auth-modal-backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <button class="auth-modal__close" id="auth-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="auth-modal__panel" id="auth-modal-login">
+        <h2 id="auth-modal-title">Вхід</h2>
+        <p class="auth-modal__subtitle">Раді бачити вас знову</p>
+
+        <form id="modal-login-form" novalidate>
+          <div class="field">
+            <label for="modal-login-email">Email</label>
+            <input type="email" id="modal-login-email" name="email" autocomplete="email" />
+            <span class="field-error" id="modal-login-email-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-login-password">Пароль</label>
+            <input type="password" id="modal-login-password" name="password" autocomplete="current-password" />
+            <span class="field-error" id="modal-login-password-error"></span>
+          </div>
+
+          <button type="submit" class="btn--primary">Увійти</button>
+
+          <div class="form-message" id="modal-login-message"></div>
+        </form>
+
+        <p class="auth-modal__switch">Ще немає акаунта? <button type="button" class="auth-modal__link" data-switch-to="register">Зареєструватися</button></p>
+      </div>
+
+      <div class="auth-modal__panel" id="auth-modal-register" hidden>
+        <h2>Створити акаунт</h2>
+        <p class="auth-modal__subtitle">Це займе не більше хвилини</p>
+
+        <form id="modal-register-form" novalidate>
+          <div class="field">
+            <label for="modal-register-fullName">Ім'я та прізвище</label>
+            <input type="text" id="modal-register-fullName" name="fullName" autocomplete="name" />
+            <span class="field-error" id="modal-register-fullName-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-email">Email</label>
+            <input type="email" id="modal-register-email" name="email" autocomplete="email" />
+            <span class="field-error" id="modal-register-email-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-phone">Телефон</label>
+            <input type="tel" id="modal-register-phone" name="phone" placeholder="+380XXXXXXXXX" autocomplete="tel" inputmode="tel" maxlength="18" />
+            <span class="field-error" id="modal-register-phone-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-password">Пароль</label>
+            <input type="password" id="modal-register-password" name="password" autocomplete="new-password" />
+            <span class="field-error" id="modal-register-password-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="modal-register-passwordConfirm">Підтвердження пароля</label>
+            <input type="password" id="modal-register-passwordConfirm" name="passwordConfirm" autocomplete="new-password" />
+            <span class="field-error" id="modal-register-passwordConfirm-error"></span>
+          </div>
+
+          <div class="field field--checkbox">
+            <input type="checkbox" id="modal-register-agree" name="agree" />
+            <label for="modal-register-agree">Погоджуюсь з умовами використання та політикою конфіденційності</label>
+          </div>
+          <span class="field-error" id="modal-register-agree-error"></span>
+
+          <button type="submit" class="btn--primary">Зареєструватися</button>
+
+          <div class="form-message" id="modal-register-message"></div>
+        </form>
+
+        <p class="auth-modal__switch">Вже є акаунт? <button type="button" class="auth-modal__link" data-switch-to="login">Увійти</button></p>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="dist/js/product-page.js"></script>
