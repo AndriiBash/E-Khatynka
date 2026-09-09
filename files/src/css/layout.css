@@ -38,7 +38,9 @@
 }
 
 .categories__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   border: none;
@@ -48,6 +50,15 @@
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.categories__item-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
 }
 
 .categories__item--active {
@@ -730,6 +741,13 @@ body.has-open-user-menu .mobile-cart-button {
   z-index: 110;
   visibility: hidden;
   pointer-events: none;
+  /* Без transition тут visibility:hidden застосовувався б МИТТЄВО в
+     момент зняття --open — обрізаючи transform-анімацію панелі на
+     півшляху (вона просто зникала б, а не з'їжджала вниз). З
+     transition на visibility браузер відкладає приховування до кінця
+     тих самих 0.25s — той самий прийом, що й у .user-menu__dropdown
+     на мобілці. */
+  transition: visibility 0.25s;
 }
 
 .mobile-cart-sheet--open {

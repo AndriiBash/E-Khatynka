@@ -2,7 +2,7 @@ import { getSession, logout } from "./storage.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
 import { setupCatalog, setSearchQuery } from "./catalog.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
-import { setupSwipeToClose } from "./swipe-sheet.js";
+import { userMenuHtml, setupUserMenu } from "./user-menu.js";
 
 // ==============================
 // "Докування" плаваючих кнопок пошуку/кошика перед футером (мобілка).
@@ -33,55 +33,6 @@ function syncSearchInputs(value: string, exceptId: string): void {
 // Показує кнопку "Увійти" або привітання + "Вийти" залежно від сесії.
 // ==============================
 
-function setupUserMenu(): void {
-  const menu = document.getElementById("user-menu");
-  const trigger = document.getElementById("user-menu-trigger");
-  const backdrop = document.getElementById("user-menu-backdrop");
-  const dropdown = menu?.querySelector<HTMLElement>(".user-menu__dropdown");
-  const handleHit = menu?.querySelector<HTMLElement>(".user-menu__dropdown-handle-hit");
-  if (!menu || !trigger) return;
-
-  const close = (): void => {
-    menu.classList.remove("user-menu--open");
-    trigger.setAttribute("aria-expanded", "false");
-    document.body.classList.remove("has-open-user-menu");
-  };
-
-  const toggle = (): void => {
-    const isOpen = menu.classList.toggle("user-menu--open");
-    trigger.setAttribute("aria-expanded", String(isOpen));
-    document.body.classList.toggle("has-open-user-menu", isOpen);
-    if (isOpen) {
-      // Плаваюча кнопка пошуку — сусідній елемент поза topbar, і через
-      // те, що topbar має свій stacking context (position+z-index),
-      // z-index самого дропдауна на неї не діє й вона "пролазить" зверху.
-      // Найнадійніше — просто ховати/закривати пошук, поки меню відкрите.
-      document.dispatchEvent(new CustomEvent("mobile-search:force-close"));
-    }
-  };
-
-  trigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggle();
-  });
-
-  backdrop?.addEventListener("click", close);
-  document.getElementById("user-menu-close")?.addEventListener("click", close);
-
-  if (dropdown && handleHit) {
-    // Той самий свайп-жест, що й у кошику на мобілці (кнопка "Меню"
-    // тепер виглядає й поводиться так само, як шторка кошика).
-    setupSwipeToClose(dropdown, handleHit, close);
-  }
-
-  document.addEventListener("click", (e) => {
-    if (!menu.contains(e.target as Node)) close();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-  });
-}
 
 function setupMobileSearch(): void {
   const wrap = document.getElementById("mobile-search");
@@ -205,6 +156,13 @@ function setupMobileSearch(): void {
   vv?.addEventListener("scroll", syncWithKeyboard);
 
   const open = (): void => {
+    // Пошук завжди відкривається згори сторінки — інакше при глибокому
+    // скролі каталогу поле з'являлось би поверх довільного місця, а не
+    // там, де користувач очікує його побачити. Скрол — до
+    // lockBodyScroll() нижче, щоб той зафіксував саме вже нульову
+    // позицію (і повернув на неї ж при закритті).
+    window.scrollTo(0, 0);
+
     wrap.classList.add("mobile-search--open");
     // На випадок, якщо кнопку відкрили, вже будучи докованою внизу
     // біля футера — примусово знімаємо .is-docked і повертаємось до
@@ -218,12 +176,17 @@ function setupMobileSearch(): void {
     lockBodyScroll();
     enableTouchBlock();
     // Через lockBodyScroll (position:fixed на body) sticky-шапка втрачає
-    // свою "прилипну" позицію (вона рахується від реального скролу, а
-    // його більше немає) і різко "телепортується" за межі екрана — це і
-    // був той самий баг зі зникаючим тайтлбаром. Замість боротьби з тим,
-    // як браузер рахує sticky в цей момент, ховаємо шапку самі, свідомо
-    // й плавно — так це виглядає як навмисна дія, а не збій.
-    document.querySelector(".stub__topbar")?.classList.add("stub__topbar--hidden");
+    // свою "прилипну" позицію і "телепортується" — замість того, щоб
+    // ховати шапку (як було раніше), тепер підмінюємо її на
+    // position:fixed у тих самих координатах, і компенсуємо висоту, яку
+    // вона звільнила з потоку, паддінгом на .stub — контент під нею не
+    // підстрибує, а сама шапка лишається на місці й видимою.
+    const topbar = document.querySelector<HTMLElement>(".stub__topbar");
+    const stubEl = document.querySelector<HTMLElement>(".stub");
+    if (topbar && stubEl) {
+      stubEl.style.paddingTop = `${topbar.getBoundingClientRect().height}px`;
+      topbar.classList.add("stub__topbar--pinned");
+    }
 
     input.focus({ preventScroll: true });
 
@@ -255,7 +218,9 @@ function setupMobileSearch(): void {
     lockedKeyboardH = 0;
     unlockBodyScroll();
     disableTouchBlock();
-    document.querySelector(".stub__topbar")?.classList.remove("stub__topbar--hidden");
+    document.querySelector(".stub__topbar")?.classList.remove("stub__topbar--pinned");
+    const stubEl = document.querySelector<HTMLElement>(".stub");
+    if (stubEl) stubEl.style.paddingTop = "";
     isSettling = false;
     if (settleTimer !== undefined) {
       clearTimeout(settleTimer);
@@ -379,51 +344,22 @@ async function render(): Promise<void> {
 
   const session = await getSession();
 
+  // Адмін логіниться через ту саму форму (спецкейс "admin"/"pass" —
+  // дивись server.js), але каталог йому не потрібен — одразу шле на
+  // окрему заглушку /admin.html.
+  if (session && session.role === "admin") {
+    window.location.href = "admin.html";
+    return;
+  }
+
   if (session) {
     const firstName = session.fullName.split(" ")[0];
-    const initial = firstName.charAt(0).toUpperCase();
 
     if (greeting) {
       greeting.textContent = `Вітаємо, ${firstName}!`;
     }
 
-    slot.innerHTML = `
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu__trigger" id="user-menu-trigger" aria-haspopup="true" aria-expanded="false">
-          <span>Привіт, ${firstName}!</span>
-          <span class="user-menu__avatar" aria-hidden="true">${initial}</span>
-        </button>
-        <div class="user-menu__backdrop" id="user-menu-backdrop"></div>
-        <div class="user-menu__dropdown">
-          <div class="user-menu__dropdown-handle-hit">
-            <div class="user-menu__dropdown-handle"></div>
-          </div>
-          <div class="user-menu__dropdown-header">
-            <h2>Меню</h2>
-            <button class="user-menu__dropdown-close" id="user-menu-close" type="button" aria-label="Закрити">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <button class="user-menu__item" type="button">
-            <img class="user-menu__icon" src="assets/icons/orders.svg" alt="" aria-hidden="true" />
-            Мої замовлення
-          </button>
-          <button class="user-menu__item" type="button">
-            <img class="user-menu__icon" src="assets/icons/payment.svg" alt="" aria-hidden="true" />
-            Способи оплати
-          </button>
-          <button class="user-menu__item" type="button">
-            <img class="user-menu__icon" src="assets/icons/preferences.svg" alt="" aria-hidden="true" />
-            Мої вподобання
-          </button>
-          <button class="user-menu__item" id="logout-btn" type="button">
-            <img class="user-menu__icon" src="assets/icons/logout.svg" alt="" aria-hidden="true" />
-            Вийти
-          </button>
-        </div>
-      </div>`;
+    slot.innerHTML = userMenuHtml(session);
 
     document.getElementById("logout-btn")?.addEventListener("click", () => {
       // Чекаємо, поки /api/logout справді очистить сесію на сервері —

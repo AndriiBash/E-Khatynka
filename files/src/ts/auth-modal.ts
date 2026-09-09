@@ -101,7 +101,11 @@ function initLoginForm(): void {
       clearErrors(["modal-login-email", "modal-login-password"]);
       let hasError = false;
 
-      if (!EMAIL_RE.test(email)) {
+      // Спецкейс: логін "admin" (без формату email) — для входу в
+      // сідований адмін-акаунт (дивись server.js — там же й перевірка
+      // паролю з тим самим бекенд-спецкейсом).
+      const isAdminLogin = email.toLowerCase() === "admin";
+      if (!isAdminLogin && !EMAIL_RE.test(email)) {
         showFieldError("modal-login-email", "Введіть коректний email");
         hasError = true;
       }

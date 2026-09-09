@@ -1,4 +1,6 @@
-import { CATEGORIES, PRODUCTS, type Product } from "./products.js";
+import { PRODUCTS, type Product } from "./products.js";
+import { getCategories } from "./storage.js";
+import type { ApiCategory } from "./types.js";
 import {
   addToCart,
   subscribeCart,
@@ -16,28 +18,65 @@ const CURRENCY = "₴";
 
 let activeCategory = "all";
 let searchQuery = "";
+let dynamicCategories: ApiCategory[] = [];
+
+function categoryIconHtml(iconUrl: string | null): string {
+  if (!iconUrl) return "";
+  // onerror="this.remove()" — щоб биту/ще не завантажену адміном
+  // іконку не бачити порожньою рамкою, а просто лишити текстову назву.
+  return `<img class="categories__item-icon" src="${iconUrl}" alt="" aria-hidden="true" onerror="this.remove()" />`;
+}
+
+const DEFAULT_HERO_SUBTITLE = "Свіжа випічка щодня — обирайте категорію зліва або гортайте весь каталог.";
+
+function updateHeroSubtitle(): void {
+  const subtitle = document.getElementById("hero-subtitle");
+  if (!subtitle) return;
+
+  const category = dynamicCategories.find((c) => String(c.id) === activeCategory);
+  subtitle.textContent = category?.description || DEFAULT_HERO_SUBTITLE;
+}
 
 function renderCategories(): void {
   const list = document.getElementById("categories-list");
   if (!list) return;
 
-  list.innerHTML = CATEGORIES.map(
-    (c) =>
-      `<button class="categories__item${
-        c.id === activeCategory ? " categories__item--active" : ""
-      }" type="button" data-category="${c.id}">${c.name}</button>`
-  ).join("");
+  // "Усі товари" — псевдокатегорія, живе лише на клієнті (немає рядка
+  // в БД), решта — те, що адмін реально додав через /api/admin/categories.
+  const items: Array<{ id: string; name: string; iconUrl: string | null }> = [
+    { id: "all", name: "Усі товари", iconUrl: null },
+    ...dynamicCategories.map((c) => ({ id: String(c.id), name: c.name, iconUrl: c.iconUrl })),
+  ];
+
+  list.innerHTML = items
+    .map(
+      (c) =>
+        `<button class="categories__item${
+          c.id === activeCategory ? " categories__item--active" : ""
+        }" type="button" data-category="${c.id}">${categoryIconHtml(c.iconUrl)}<span>${c.name}</span></button>`
+    )
+    .join("");
 
   list.querySelectorAll<HTMLButtonElement>("[data-category]").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeCategory = btn.dataset.category ?? "all";
       renderCategories();
       renderProducts();
+      updateHeroSubtitle();
       // Щоб одразу було видно початок нової добірки, а не той самий
       // рядок прокрутки, на якому застали попередню категорію.
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   });
+}
+
+async function loadCategories(): Promise<void> {
+  dynamicCategories = await getCategories();
+  renderCategories();
+  // Категорію могли вже обрати (не мало б статись до першого
+  // завантаження списку, але про всяк випадок) — і опис міг щойно
+  // "приїхати" разом із самим списком категорій.
+  updateHeroSubtitle();
 }
 
 function productCardHtml(p: Product): string {
@@ -339,6 +378,26 @@ function setupMobileCartSheet(): void {
   document.getElementById("mobile-cart-sheet-backdrop")?.addEventListener("click", closeMobileCartSheet);
 }
 
+// БАГ: якщо шторку кошика відкрили на мобільній ширині (реальний
+// телефон, поворот екрана; чи просто вузьке вікно/devtools), а потім
+// той самий таб став десктопним — сама шторка про це ніяк "не
+// дізнається": показ/приховування керується лише класом
+// mobile-cart-sheet--open, без @media (кнопка відкриття — так,
+// .mobile-cart-button ховається на десктопі медіа-запитом, а от вже
+// відкрита шторка лишається висіти зверху). Форсовано закриваємо її,
+// щойно ширина перетинає той самий брейкпоінт (640px), на якому
+// .mobile-cart-button і зникає.
+function setupMobileCartSheetAutoClose(): void {
+  const mq = window.matchMedia("(min-width: 641px)");
+  mq.addEventListener("change", (e) => {
+    if (!e.matches) return;
+    const sheet = document.getElementById("mobile-cart-sheet");
+    if (sheet?.classList.contains("mobile-cart-sheet--open")) {
+      closeMobileCartSheet();
+    }
+  });
+}
+
 // Свайп по "ручці" шторки вниз — закриває її. Раніше сама ручка була
 // зовсім тонкою смужкою (40×4px) — влучити по ній пальцем було складно,
 // тож свайп ніби "не працював". Реальна область дотику тепер значно
@@ -423,6 +482,7 @@ function setupClearCartModal(): void {
 
 export function setupCatalog(): void {
   renderCategories();
+  void loadCategories();
   // Спочатку — скелетони з "переливом" (як у YouTube/Яндекс Лавці), і
   // тільки після невеликої паузи — реальні картки. Суто для відчуття
   // "щось вантажиться", а не миттєвий стрибок порожньо→повно.
@@ -430,6 +490,7 @@ export function setupCatalog(): void {
   window.setTimeout(renderProducts, SKELETON_DELAY_MS);
   subscribeCart(renderCart);
   setupMobileCartSheet();
+  setupMobileCartSheetAutoClose();
   setupSheetSwipeToClose();
   setupClearCartModal();
 }

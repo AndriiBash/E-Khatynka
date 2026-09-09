@@ -27,12 +27,22 @@
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Свідоме плавне ховання шапки на час відкритого мобільного пошуку —
-   див. коментар в setupMobileSearch (main.ts). */
-.stub__topbar--hidden {
-  opacity: 0;
-  transform: translateY(-100%);
-  pointer-events: none;
+/* Поки відкритий мобільний пошук: lockBodyScroll() ставить
+   position:fixed на <body> (стандартний прийом проти iOS-bounce), а
+   position:sticky всередині зафіксованого body починає рахуватись
+   неправильно й шапка "телепортується" з екрана. Раніше це просто
+   ховали (opacity 0) — тепер замість sticky на час локу шапка сама
+   стає position:fixed у тих самих координатах (top:0), тож візуально
+   нічого не змінюється, а sticky-баг просто не встигає спрацювати.
+   Клас додає/знімає main.ts; компенсаційний відступ (щоб контент під
+   шапкою не "підстрибнув" на висоту шапки, яка випала з потоку) —
+   теж звідти, inline через --topbar-pinned-h. */
+.stub__topbar--pinned {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
 }
 
 .stub__search {
@@ -172,6 +182,326 @@
 
 .stub__body {
   flex: 1;
+}
+
+/* ---- Адмін-панель (admin.html) ---- */
+
+.admin-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+.admin-page__title {
+  font-size: var(--fs-2xl);
+  margin-bottom: var(--space-6);
+}
+
+.admin-section {
+  max-width: 640px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+}
+
+.admin-section__title {
+  font-size: var(--fs-md);
+  margin-bottom: var(--space-2);
+}
+
+.admin-section__hint {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  margin: 0 0 var(--space-5);
+}
+
+.admin-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  max-width: 900px;
+  margin-bottom: var(--space-4);
+}
+
+.admin-table-header .admin-page__title {
+  margin-bottom: 0;
+}
+
+.admin-add-btn {
+  flex-shrink: 0;
+}
+
+.admin-section--wide {
+  max-width: 900px;
+}
+
+/* Той самий вигляд, що й у порожнього кошика (.cart-empty) — щоб
+   "тут нічого нема" виглядало однаково по всьому сайту. */
+.admin-categories-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-5) 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.admin-categories-empty__icon {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  margin-bottom: var(--space-3);
+}
+
+.admin-back {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-back:hover {
+    color: var(--color-text);
+  }
+}
+
+/* ---- Плитки таблиць (головна admin-панелі) ---- */
+
+.admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 132px;
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-lg);
+  text-align: left;
+  color: var(--color-text);
+  transition: transform 0.12s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-tile:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.admin-tile__label {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.admin-tile__count {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  opacity: 0.65;
+}
+
+/* ---- Таблиця записів (категорії, поки єдина робоча) ---- */
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  font-size: var(--fs-sm);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table__icon-cell {
+  width: 44px;
+}
+
+.admin-table__icon,
+.admin-table__icon--placeholder {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.admin-table__name-cell {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-table__description-cell {
+  color: var(--color-text-muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-table__actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-table__edit-btn,
+.admin-table__delete-btn {
+  border: none;
+  background: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-2);
+}
+
+.admin-table__edit-btn {
+  color: var(--color-accent-dark);
+}
+
+.admin-table__delete-btn {
+  color: var(--color-error);
+}
+
+.admin-table__action-icon {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .admin-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* На мобілці — квадратні заокруглені кнопки з іконкою замість
+     тексту (тексту в такому вузькому стовпці елементарно бракує
+     місця, а самих слів "Редагувати"/"Видалити" при двох кнопках
+     поспіль забагато). */
+  .admin-table__actions-cell {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+  }
+
+  .admin-table__edit-btn,
+  .admin-table__delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-muted);
+  }
+
+  .admin-table__action-icon {
+    display: block;
+    width: 18px;
+    height: 18px;
+  }
+
+  .admin-table__action-label {
+    display: none;
+  }
+}
+
+/* ---- Пікер іконки (файл із диска, з превʼю) ---- */
+
+.admin-icon-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.admin-icon-picker__preview-slot:empty {
+  display: none;
+}
+
+.admin-icon-picker__preview {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+/* Специфічність підвищена навмисно: цей <label> лежить всередині
+   .field, а .field label (auth.css) з display:block переважав би наш
+   inline-flex (однакова к-ть класів, але там ще й тег-селектор
+   додається до специфічності) — саме тому текст був не по центру
+   вертикально, а притиснутий угору як у звичайного блочного лейбла. */
+.field .admin-icon-picker__pick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 var(--space-4);
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-icon-picker__pick-btn:hover {
+    background: var(--color-border);
+  }
+}
+
+/* Реальний <input type="file"> лишається доступним для клавіатури й
+   скрінрідерів через пов'язаний <label for="..."> вище — приховувати
+   display:none тут безпечно, лейбл однаково активує клік по інпуту. */
+.admin-icon-picker__input {
+  display: none;
+}
+
+.admin-icon-picker__clear {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 0;
+}
+
+.admin-icon-picker__status {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
 }
 
 /* ---- Меню користувача ---- */

@@ -18,18 +18,12 @@ export interface Product {
   manufacturer: string;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-}
-
-export const CATEGORIES: Category[] = [
-  { id: "all", name: "Усі товари" },
-  { id: "bread", name: "Хліб" },
-  { id: "pastry", name: "Випічка" },
-  { id: "cakes", name: "Торти" },
-  { id: "drinks", name: "Напої" },
-];
+// Категорії тепер живуть у БД (таблиця categories, /api/categories) —
+// дивись storage.ts/catalog.ts. products.category тут лишається
+// рядком-заглушкою (bread/pastry/...) для фільтрації МОК-товарів
+// нижче — поки самі товари не переїхали в БД, реальні id категорій з
+// бекенду з ними не зв'яжуться (тож клік по щойно доданій в адмінці
+// категорії покаже порожній список — це очікувано, а не баг).
 
 export const PRODUCTS: Product[] = [
   {

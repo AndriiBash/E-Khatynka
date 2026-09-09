@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Адмін — Є-Хатинка</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/preloader.css" />
+  <link rel="stylesheet" href="src/css/main.css" />
+  <link rel="stylesheet" href="src/css/layout.css" />
+  <link rel="stylesheet" href="src/css/auth.css" />
+</head>
+<body>
+
+  <div class="preloader" id="preloader">
+    <div class="preloader__mark"><span class="logo-accent">Є-</span>Хатинка<span class="preloader__mark-dot">.</span></div>
+    <div class="preloader__bar"><div class="preloader__bar-fill"></div></div>
+  </div>
+
+  <div class="stub">
+    <header class="stub__topbar">
+      <a class="stub__logo" href="index.html"><span class="logo-accent">Є-</span>Хатинка<span class="stub__logo-dot">.</span></a>
+      <div class="stub__topbar-spacer"></div>
+      <div id="auth-slot"></div>
+    </header>
+
+    <main class="stub__body">
+      <div class="admin-page" id="admin-view"></div>
+    </main>
+  </div>
+
+  <div class="auth-modal" id="admin-category-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-category-modal-title">
+      <button class="auth-modal__close" id="admin-category-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-category-modal-title">Додати категорію</h2>
+      <form id="admin-category-form" novalidate>
+        <div class="field">
+          <label for="admin-cat-name">Назва категорії</label>
+          <input type="text" id="admin-cat-name" name="name" autocomplete="off" />
+          <span class="field-error" id="admin-cat-name-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-cat-description">Опис (необов'язково)</label>
+          <input type="text" id="admin-cat-description" name="description" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>Іконка (необов'язково)</label>
+          <div class="admin-icon-picker">
+            <span class="admin-icon-picker__preview-slot" id="admin-cat-icon-preview"></span>
+            <label class="admin-icon-picker__pick-btn" for="admin-cat-icon-file">Обрати файл</label>
+            <input class="admin-icon-picker__input" type="file" id="admin-cat-icon-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" />
+            <button class="admin-icon-picker__clear" id="admin-cat-icon-clear" type="button" hidden>Прибрати</button>
+            <span class="admin-icon-picker__status" id="admin-cat-icon-status"></span>
+          </div>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-category-modal-submit">Додати категорію</button>
+        <p class="form-message" id="admin-category-message"></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="admin-delete-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-modal-title">
+      <button class="auth-modal__close" id="admin-delete-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-delete-modal-title">Видалити категорію?</h2>
+      <p class="auth-modal__subtitle" id="admin-delete-modal-text">Цю дію не можна скасувати.</p>
+      <div class="clear-cart-modal__actions">
+        <button class="btn btn--ghost" id="admin-delete-modal-cancel" type="button">Скасувати</button>
+        <button class="btn btn--danger" id="admin-delete-modal-confirm" type="button">Так, видалити</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="dist/js/admin.js"></script>
+</body>
+</html>
