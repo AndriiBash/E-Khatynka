@@ -25,15 +25,111 @@
 
   <div class="stub">
     <header class="stub__topbar">
-      <a class="stub__logo" href="index.html"><span class="logo-accent">Є-</span>Хатинка<span class="stub__logo-dot">.</span></a>
+      <a class="brand" href="index.html">
+        <img class="brand__icon" src="assets/icons/logo-house.png" alt="" onerror="this.remove()" />
+        <span class="brand__text">
+          <span class="brand__name"><span class="logo-accent">Є-</span>Хатинка<span class="logo-accent">.</span></span>
+          <span class="brand__tagline">Смак, який завжди поруч</span>
+        </span>
+      </a>
       <div class="stub__topbar-spacer"></div>
       <div id="auth-slot"></div>
     </header>
 
-    <main class="stub__body">
-      <div class="admin-page" id="admin-view"></div>
-    </main>
+    <div class="admin-layout">
+      <nav class="admin-sidebar" id="admin-sidebar">
+        <a class="admin-sidebar__link" href="#" data-nav="home">
+          <span class="admin-sidebar__icon admin-sidebar__icon--home" aria-hidden="true"></span>
+          Головна
+        </a>
+
+        <div class="admin-sidebar__group">
+          <button class="admin-sidebar__group-toggle" type="button" data-group-toggle="catalog">
+            <span class="admin-sidebar__icon admin-sidebar__icon--catalog" aria-hidden="true"></span>
+            <span class="admin-sidebar__group-label">Каталог</span>
+            <span class="admin-sidebar__chevron" aria-hidden="true"></span>
+          </button>
+          <div class="admin-sidebar__group-items" id="admin-sidebar-group-catalog">
+            <div class="admin-sidebar__group-items-inner">
+              <a class="admin-sidebar__sublink" href="#/table/products" data-nav="products">Продукти</a>
+              <a class="admin-sidebar__sublink" href="#/table/categories" data-nav="categories">Категорії</a>
+            </div>
+          </div>
+        </div>
+
+        <a class="admin-sidebar__link" href="#/table/orders" data-nav="orders">
+          <span class="admin-sidebar__icon admin-sidebar__icon--orders" aria-hidden="true"></span>
+          Замовлення
+        </a>
+
+        <a class="admin-sidebar__link" href="#/table/users" data-nav="users">
+          <span class="admin-sidebar__icon admin-sidebar__icon--users" aria-hidden="true"></span>
+          Користувачі
+        </a>
+
+        <div class="admin-sidebar__group">
+          <button class="admin-sidebar__group-toggle" type="button" data-group-toggle="stock">
+            <span class="admin-sidebar__icon admin-sidebar__icon--warehouse" aria-hidden="true"></span>
+            <span class="admin-sidebar__group-label">Склад</span>
+            <span class="admin-sidebar__chevron" aria-hidden="true"></span>
+          </button>
+          <div class="admin-sidebar__group-items" id="admin-sidebar-group-stock">
+            <div class="admin-sidebar__group-items-inner">
+              <a class="admin-sidebar__sublink" href="#/table/ingredients" data-nav="ingredients">Інгредієнти</a>
+              <a class="admin-sidebar__sublink" href="#/table/ingredient_movements" data-nav="ingredient_movements">Рух інгредієнтів</a>
+            </div>
+          </div>
+        </div>
+
+        <a class="admin-sidebar__link" href="#/analytics" data-nav="analytics">
+          <span class="admin-sidebar__icon admin-sidebar__icon--analytics" aria-hidden="true"></span>
+          Аналітика
+        </a>
+
+        <a class="admin-sidebar__link" href="#/settings" data-nav="settings">
+          <span class="admin-sidebar__icon admin-sidebar__icon--settings" aria-hidden="true"></span>
+          Налаштування
+        </a>
+      </nav>
+
+      <main class="admin-main">
+        <div class="admin-page" id="admin-view"></div>
+      </main>
+    </div>
   </div>
+
+  <footer class="site-footer" id="admin-footer" hidden>
+    <div class="site-footer__inner">
+      <div class="brand">
+        <img class="brand__icon" src="assets/icons/logo-house.png" alt="" onerror="this.remove()" />
+        <span class="brand__text">
+          <span class="brand__name"><span class="logo-accent">Є-</span>Хатинка<span class="logo-accent">.</span></span>
+          <span class="brand__tagline">Смак, який завжди поруч</span>
+        </span>
+      </div>
+
+      <div class="site-footer__social">
+        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="15" height="15" rx="4.5" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="10" cy="10" r="3.7" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="14.3" cy="5.7" r="1" fill="currentColor"/>
+          </svg>
+        </a>
+        <a href="https://t.me" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M5.8 10.15L13.5 6.9C13.9 6.73 14.32 7.06 14.19 7.48L12.75 13.1C12.64 13.53 12.13 13.68 11.8 13.38L9.7 11.5L8.6 12.5C8.4 12.68 8.08 12.57 8.03 12.31L7.7 10.6L5.8 10.15Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M13.6 7L9.7 11.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </a>
+      </div>
+
+      <p class="site-footer__admin-note">Ви — Адміністратор. З великою панеллю приходить велика відповідальність: за категорії, за порядок у таблицях і, звісно, за випічку 🥐. Працюйте на совість!</p>
+
+      <p class="site-footer__thesis">Кваліфікаційна робота магістра Ізбаш А.В., група 366</p>
+    </div>
+  </footer>
 
   <div class="auth-modal" id="admin-category-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>

@@ -76,23 +76,88 @@ function escapeHtml(s: string): string {
 }
 
 // ==============================
-// Роутинг усередині сторінки: #/table/<key> — конкретна таблиця,
-// інакше (чи порожньо) — плитки. Справжніх переходів між сторінками
-// нема, тож і "назад" у браузері працює природно.
+// Роутинг усередині сторінки:
+//   #/table/<key> — таблиця з ADMIN_TABLES (плитки на головній)
+//   #/analytics, #/settings — розділи з бічного меню, яких немає
+//     серед сирих таблиць БД (не прив'язані до жодної конкретної)
+//   порожньо (чи будь-що інше) — головна (плитки)
+// Справжніх переходів між сторінками нема, тож і "назад" у браузері
+// працює природно.
 // ==============================
 
-function currentTableKey(): string | null {
-  const m = window.location.hash.match(/^#\/table\/([a-z_]+)$/);
-  return m ? m[1] : null;
+const VIRTUAL_ROUTES: Record<string, string> = {
+  "#/analytics": "Аналітика",
+  "#/settings": "Налаштування",
+};
+
+// Який пункт бічного меню (data-nav) відповідає поточному hash —
+// використовується і для підсвітки активного пункту, і для видимості
+// футера (він лише на головній).
+function currentNavKey(): string {
+  const hash = window.location.hash;
+  const tableMatch = hash.match(/^#\/table\/([a-z_]+)$/);
+  if (tableMatch) return tableMatch[1];
+  if (hash in VIRTUAL_ROUTES) return hash.slice(2); // "#/analytics" -> "analytics"
+  return "home";
 }
 
 function renderRoute(): void {
-  const key = currentTableKey();
-  if (key) {
-    void renderTableView(key);
-  } else {
-    void renderHome();
+  updateSidebarActiveState();
+  updateFooterVisibility();
+
+  const hash = window.location.hash;
+  const tableMatch = hash.match(/^#\/table\/([a-z_]+)$/);
+  if (tableMatch) {
+    void renderTableView(tableMatch[1]);
+    return;
   }
+  if (hash in VIRTUAL_ROUTES) {
+    renderStub(VIRTUAL_ROUTES[hash]);
+    return;
+  }
+  void renderHome();
+}
+
+// ==============================
+// Бічне меню (тільки десктоп, дивись main.css) — підсвітка активного
+// пункту й розгортання/згортання груп "Каталог"/"Склад". Сама
+// розмітка статична (admin.html), тож слухачі вішаємо один раз
+// (setupSidebar() з render() нижче).
+// ==============================
+
+function updateSidebarActiveState(): void {
+  const sidebar = document.getElementById("admin-sidebar");
+  if (!sidebar) return;
+
+  const activeKey = currentNavKey();
+
+  sidebar.querySelectorAll<HTMLElement>("[data-nav]").forEach((el) => {
+    const isActive = el.dataset.nav === activeKey;
+    el.classList.toggle("admin-sidebar__link--active", isActive && el.classList.contains("admin-sidebar__link"));
+    el.classList.toggle("admin-sidebar__sublink--active", isActive && el.classList.contains("admin-sidebar__sublink"));
+  });
+
+  // Якщо активний пункт — підпункт групи (Продукти/Категорії в
+  // "Каталозі", Інгредієнти/Рух в "Складі") — розгортаємо саме її.
+  sidebar
+    .querySelector(".admin-sidebar__sublink--active")
+    ?.closest(".admin-sidebar__group")
+    ?.classList.add("admin-sidebar__group--open");
+}
+
+function setupSidebar(): void {
+  document.querySelectorAll<HTMLButtonElement>("[data-group-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.closest(".admin-sidebar__group")?.classList.toggle("admin-sidebar__group--open");
+    });
+  });
+}
+
+// Футер (той самий, що на index.html) — лише на головній сторінці
+// адмінки, дивись admin-footer у admin.html.
+function updateFooterVisibility(): void {
+  const footer = document.getElementById("admin-footer");
+  if (footer) footer.hidden = currentNavKey() !== "home";
 }
 
 // ==============================
@@ -130,18 +195,20 @@ async function renderHome(): Promise<void> {
 }
 
 // ==============================
-// Заглушка для ще не підключених таблиць
+// Заглушка для ще не підключених розділів (і сирих таблиць БД, і
+// пунктів бічного меню на кшталт "Аналітика"/"Налаштування", які
+// взагалі не прив'язані до жодної окремої таблиці).
 // ==============================
 
-function renderStubTable(table: TableDef): void {
+function renderStub(label: string): void {
   const root = document.getElementById("admin-view");
   if (!root) return;
 
   root.innerHTML = `
     <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
-    <h1 class="admin-page__title">${table.label}</h1>
+    <h1 class="admin-page__title">${label}</h1>
     <section class="admin-section">
-      <div class="admin-categories-empty">Керування цією таблицею ще в розробці.</div>
+      <div class="admin-categories-empty">Цей розділ ще в розробці.</div>
     </section>`;
 
   document.getElementById("admin-back-btn")?.addEventListener("click", () => {
@@ -157,6 +224,10 @@ function renderStubTable(table: TableDef): void {
 // ==============================
 
 let allCategories: ApiCategory[] = [];
+let categorySearchQuery = "";
+let categoryPage = 1;
+let previewCategoryId: number | null = null;
+const CATEGORY_PAGE_SIZE = 8;
 
 // Іконка модалки додавання/редагування — єдине джерело правди для
 // поточного вибору файлу (сам файл уже залито на сервер одразу при
@@ -215,18 +286,24 @@ function setupCategoryModalIconPicker(): void {
 
 const EDIT_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M15.5 4.5L19.5 8.5M3 21L3.6 17.8C3.7 17.2 4 16.6 4.4 16.2L15 5.6C15.8 4.8 17.1 4.8 17.9 5.6L18.4 6.1C19.2 6.9 19.2 8.2 18.4 9L7.8 19.6C7.4 20 6.8 20.3 6.2 20.4L3 21Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const DELETE_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7H20M9 7V4.5C9 4 9.4 3.5 10 3.5H14C14.6 3.5 15 4 15 4.5V7M6 7L6.8 19C6.9 19.7 7.5 20.2 8.2 20.2H15.8C16.5 20.2 17.1 19.7 17.2 19L18 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const PREVIEW_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 12C2 12 5.5 5 12 5C18.5 5 22 12 22 12C22 12 18.5 19 12 19C5.5 19 2 12 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
 function categoryRowHtml(c: ApiCategory): string {
   const icon = c.iconUrl
     ? `<img class="admin-table__icon" src="${c.iconUrl}" alt="" aria-hidden="true" onerror="this.remove()" />`
     : `<span class="admin-table__icon admin-table__icon--placeholder" aria-hidden="true"></span>`;
+  const description = c.description ? escapeHtml(c.description) : "—";
 
   return `
-    <tr>
+    <tr class="${c.id === previewCategoryId ? "admin-table__row--active" : ""}" data-row-id="${c.id}">
+      <td class="admin-table__id-cell">${c.id}</td>
       <td class="admin-table__icon-cell">${icon}</td>
-      <td class="admin-table__name-cell">${escapeHtml(c.name)}</td>
-      <td class="admin-table__description-cell">${c.description ? escapeHtml(c.description) : "—"}</td>
+      <td class="admin-table__name-cell" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
+      <td class="admin-table__description-cell" title="${c.description ? escapeHtml(c.description) : ""}">${description}</td>
       <td class="admin-table__actions-cell">
+        <button class="admin-table__preview-btn" data-preview="${c.id}" type="button" aria-label="Переглянути">
+          ${PREVIEW_ICON_SVG}<span class="admin-table__action-label">Переглянути</span>
+        </button>
         <button class="admin-table__edit-btn" data-edit="${c.id}" type="button" aria-label="Редагувати">
           ${EDIT_ICON_SVG}<span class="admin-table__action-label">Редагувати</span>
         </button>
@@ -237,25 +314,31 @@ function categoryRowHtml(c: ApiCategory): string {
     </tr>`;
 }
 
-const EMPTY_CATEGORIES_HTML = `
-  <div class="admin-categories-empty">
-    <img class="admin-categories-empty__icon" src="assets/images/empty-categories.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
-    Категорій ще немає.<br />Додайте першу кнопкою вище.
-  </div>`;
+// Скелетон-рядки на час першого завантаження списку категорій (те
+// саме .skeleton-переливання, що й у каталозі покупця/на сторінці
+// товару — спільний механізм з tokens.css).
+const CATEGORY_SKELETON_ROWS = 5;
 
-function renderCategoriesTableBody(): void {
+function categorySkeletonRowHtml(): string {
+  return `
+    <tr>
+      <td class="admin-table__id-cell"><span class="skeleton admin-table__skeleton-id"></span></td>
+      <td class="admin-table__icon-cell"><span class="skeleton admin-table__skeleton-icon"></span></td>
+      <td class="admin-table__name-cell"><span class="skeleton admin-table__skeleton-name"></span></td>
+      <td class="admin-table__description-cell"><span class="skeleton admin-table__skeleton-description"></span></td>
+      <td class="admin-table__actions-cell"></td>
+    </tr>`;
+}
+
+function renderCategoriesTableSkeleton(): void {
   const wrap = document.getElementById("admin-categories-table-wrap");
   if (!wrap) return;
-
-  if (!allCategories.length) {
-    wrap.innerHTML = EMPTY_CATEGORIES_HTML;
-    return;
-  }
 
   wrap.innerHTML = `
     <table class="admin-table">
       <thead>
         <tr>
+          <th>ID</th>
           <th></th>
           <th>Назва</th>
           <th>Опис</th>
@@ -263,9 +346,213 @@ function renderCategoriesTableBody(): void {
         </tr>
       </thead>
       <tbody>
-        ${allCategories.map(categoryRowHtml).join("")}
+        ${Array.from({ length: CATEGORY_SKELETON_ROWS }, categorySkeletonRowHtml).join("")}
       </tbody>
     </table>`;
+}
+
+const EMPTY_CATEGORIES_HTML = `
+  <div class="admin-categories-empty">
+    <img class="admin-categories-empty__icon" src="assets/images/empty-categories.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
+    Категорій ще немає.<br />Додайте першу кнопкою вище.
+  </div>`;
+
+// Просте регістронезалежне "містить" по назві — датасет категорій
+// невеликий, повноцінний бекенд-пошук тут явно надлишковий.
+function filteredCategories(): ApiCategory[] {
+  const q = categorySearchQuery.trim().toLowerCase();
+  if (!q) return allCategories;
+  return allCategories.filter((c) => c.name.toLowerCase().includes(q));
+}
+
+function renderCategoryPagination(filteredCount: number): void {
+  const el = document.getElementById("admin-categories-pagination");
+  if (!el) return;
+
+  if (filteredCount === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / CATEGORY_PAGE_SIZE));
+  const start = (categoryPage - 1) * CATEGORY_PAGE_SIZE + 1;
+  const end = Math.min(categoryPage * CATEGORY_PAGE_SIZE, filteredCount);
+  const summary = `<p class="admin-pagination__summary">Показано ${start}–${end} з ${pluralizeRecords(filteredCount)}</p>`;
+
+  if (totalPages <= 1) {
+    el.innerHTML = summary;
+    return;
+  }
+
+  let pageButtons = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pageButtons += `<button class="admin-pagination__page${
+      p === categoryPage ? " admin-pagination__page--active" : ""
+    }" data-page="${p}" type="button">${p}</button>`;
+  }
+
+  el.innerHTML = `
+    ${summary}
+    <div class="admin-pagination__controls">
+      <button class="admin-pagination__arrow" id="admin-cat-page-prev" type="button" aria-label="Попередня сторінка" ${
+        categoryPage === 1 ? "disabled" : ""
+      }>‹</button>
+      ${pageButtons}
+      <button class="admin-pagination__arrow" id="admin-cat-page-next" type="button" aria-label="Наступна сторінка" ${
+        categoryPage === totalPages ? "disabled" : ""
+      }>›</button>
+    </div>`;
+
+  document.getElementById("admin-cat-page-prev")?.addEventListener("click", () => {
+    if (categoryPage > 1) {
+      categoryPage--;
+      renderCategoriesTableBody();
+    }
+  });
+  document.getElementById("admin-cat-page-next")?.addEventListener("click", () => {
+    if (categoryPage < totalPages) {
+      categoryPage++;
+      renderCategoriesTableBody();
+    }
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      categoryPage = Number(btn.dataset.page);
+      renderCategoriesTableBody();
+    });
+  });
+}
+
+function renderCategoryPreviewPanel(): void {
+  const panel = document.getElementById("admin-category-preview");
+  if (!panel) return;
+
+  const category = allCategories.find((c) => c.id === previewCategoryId);
+
+  if (!category) {
+    panel.innerHTML = `<div class="admin-preview-empty">Оберіть категорію зі списку, щоб переглянути&nbsp;деталі.</div>`;
+    return;
+  }
+
+  const icon = category.iconUrl
+    ? `<img class="admin-preview__icon" src="${category.iconUrl}" alt="" onerror="this.remove()" />`
+    : `<span class="admin-preview__icon admin-preview__icon--placeholder"></span>`;
+
+  panel.innerHTML = `
+    <div class="admin-preview__header">
+      <h2 class="admin-preview__name">${escapeHtml(category.name)}</h2>
+      <span class="admin-preview__id">ID: ${category.id}</span>
+    </div>
+    ${icon}
+    <div class="admin-preview__field">
+      <span class="admin-preview__field-label">Опис</span>
+      <p class="admin-preview__field-value">${category.description ? escapeHtml(category.description) : "—"}</p>
+    </div>
+    <div class="admin-preview__actions">
+      <button class="btn btn--ghost" id="admin-preview-edit-btn" type="button">Редагувати</button>
+      <button class="btn btn--danger" id="admin-preview-delete-btn" type="button">Видалити</button>
+    </div>`;
+
+  document.getElementById("admin-preview-edit-btn")?.addEventListener("click", () => {
+    openCategoryModal({ type: "edit", id: category.id });
+  });
+
+  document.getElementById("admin-preview-delete-btn")?.addEventListener("click", () => {
+    void (async () => {
+      const confirmed = await confirmDelete(category.name);
+      if (!confirmed) return;
+      const result = await deleteCategory(category.id);
+      if (!result.ok) {
+        window.alert(result.error);
+        return;
+      }
+      previewCategoryId = null;
+      await loadAndRenderCategories();
+    })();
+  });
+}
+
+function highlightActiveTableRow(): void {
+  const wrap = document.getElementById("admin-categories-table-wrap");
+  if (!wrap) return;
+  wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.classList.toggle("admin-table__row--active", Number(tr.dataset.rowId) === previewCategoryId);
+  });
+}
+
+function renderCategoriesTableBody(): void {
+  const wrap = document.getElementById("admin-categories-table-wrap");
+  if (!wrap) return;
+
+  if (!allCategories.length) {
+    wrap.innerHTML = EMPTY_CATEGORIES_HTML;
+    renderCategoryPagination(0);
+    return;
+  }
+
+  const filtered = filteredCategories();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CATEGORY_PAGE_SIZE));
+  if (categoryPage > totalPages) categoryPage = totalPages;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="admin-categories-empty">Нічого не знайдено за запитом «${escapeHtml(
+      categorySearchQuery
+    )}».</div>`;
+    renderCategoryPagination(0);
+    return;
+  }
+
+  const pageItems = filtered.slice((categoryPage - 1) * CATEGORY_PAGE_SIZE, categoryPage * CATEGORY_PAGE_SIZE);
+
+  wrap.innerHTML = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th></th>
+          <th>Назва</th>
+          <th>Опис</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pageItems.map(categoryRowHtml).join("")}
+      </tbody>
+    </table>`;
+
+  const openPreview = (id: number): void => {
+    previewCategoryId = id;
+    // Не перегенеровуємо всю таблицю заради єдиного класу
+    // "активний рядок" — innerHTML наново пересоздавав усі <img>
+    // іконки в таблиці, тож вони на мить зникали й підвантажувались
+    // заново (той самий баг було видно й тут, і при відкритті
+    // перегляду категорії). Просто перемикаємо клас на рядках.
+    highlightActiveTableRow();
+    renderCategoryPreviewPanel();
+  };
+
+  wrap.querySelectorAll<HTMLButtonElement>("[data-preview]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openPreview(Number(btn.dataset.preview));
+    });
+  });
+
+  // Клік по всьому рядку відкриває перегляд — лише на пристроях із
+  // мишею (той самий "hover: hover and pointer: fine", яким тут скрізь
+  // визначають "десктоп"): на тач-екрані рядок і так вузький, і
+  // випадковий тап між кнопками дій відкривав би перегляд замість
+  // очікуваної дії (чи взагалі нічого).
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+      tr.addEventListener("click", (e) => {
+        // Кнопки дій всередині рядка мають власні обробники — не
+        // перехоплюємо їхні кліки (інакше "Видалити" ще й відкривав би
+        // перегляд тієї категорії, яку щойно видалив).
+        if ((e.target as HTMLElement).closest("button")) return;
+        openPreview(Number(tr.dataset.rowId));
+      });
+    });
+  }
 
   wrap.querySelectorAll<HTMLButtonElement>("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -291,15 +578,50 @@ function renderCategoriesTableBody(): void {
           window.alert(result.error);
           return;
         }
+        if (previewCategoryId === id) previewCategoryId = null;
         await loadAndRenderCategories();
       })();
     });
   });
+
+  renderCategoryPagination(filtered.length);
 }
 
 async function loadAndRenderCategories(): Promise<void> {
   allCategories = await getCategories();
+  if (previewCategoryId !== null && !allCategories.some((c) => c.id === previewCategoryId)) {
+    previewCategoryId = null;
+  }
   renderCategoriesTableBody();
+  renderCategoryPreviewPanel();
+}
+
+function setupCategorySearch(): void {
+  const input = document.getElementById("admin-cat-search") as HTMLInputElement | null;
+  const clearBtn = document.getElementById("admin-cat-search-clear") as HTMLButtonElement | null;
+  if (!input) return;
+
+  const syncClearBtn = (): void => {
+    clearBtn?.classList.toggle("admin-search-clear--visible", input.value.length > 0);
+  };
+
+  input.addEventListener("input", () => {
+    categorySearchQuery = input.value;
+    categoryPage = 1;
+    syncClearBtn();
+    renderCategoriesTableBody();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    categorySearchQuery = "";
+    categoryPage = 1;
+    syncClearBtn();
+    renderCategoriesTableBody();
+    input.focus();
+  });
+
+  syncClearBtn();
 }
 
 // ---- Модалка додавання/редагування категорії ----
@@ -430,6 +752,10 @@ function renderCategoriesTable(): void {
   const root = document.getElementById("admin-view");
   if (!root) return;
 
+  categorySearchQuery = "";
+  categoryPage = 1;
+  previewCategoryId = null;
+
   root.innerHTML = `
     <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
     <div class="admin-table-header">
@@ -437,10 +763,25 @@ function renderCategoriesTable(): void {
       <button class="btn btn--primary-sm admin-add-btn" id="admin-add-category-btn" type="button">+ Додати категорію</button>
     </div>
 
-    <section class="admin-section admin-section--wide">
-      <p class="admin-section__hint">Категорії, які ви тут додаєте, одразу зʼявляються у боковому меню каталогу для покупця.</p>
-      <div id="admin-categories-table-wrap"></div>
-    </section>`;
+    <div class="admin-categories-layout">
+      <section class="admin-section admin-section--wide">
+        <p class="admin-section__hint">Категорії, які ви тут додаєте, одразу зʼявляються у боковому меню каталогу для покупця.</p>
+
+        <div class="admin-table-toolbar">
+          <div class="admin-search-wrap">
+            <input type="text" id="admin-cat-search" class="admin-table-search" placeholder="Пошук категорій за назвою…" autocomplete="off" />
+            <button class="admin-search-clear" id="admin-cat-search-clear" type="button" aria-label="Очистити пошук">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-categories-table-wrap"></div>
+        <div id="admin-categories-pagination" class="admin-pagination"></div>
+      </section>
+
+      <section class="admin-section admin-preview" id="admin-category-preview"></section>
+    </div>`;
 
   document.getElementById("admin-back-btn")?.addEventListener("click", () => {
     window.location.hash = "";
@@ -449,6 +790,8 @@ function renderCategoriesTable(): void {
     openCategoryModal({ type: "create" });
   });
 
+  setupCategorySearch();
+  renderCategoriesTableSkeleton();
   void loadAndRenderCategories();
 }
 
@@ -462,7 +805,7 @@ async function renderTableView(key: string): Promise<void> {
   if (table.key === "categories") {
     renderCategoriesTable();
   } else {
-    renderStubTable(table);
+    renderStub(table.label);
   }
 }
 
@@ -538,6 +881,7 @@ async function render(): Promise<void> {
 
   setupUserMenu();
   setupCategoryModal();
+  setupSidebar();
 
   window.addEventListener("hashchange", renderRoute);
   renderRoute();

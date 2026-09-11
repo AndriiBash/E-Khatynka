@@ -7,8 +7,21 @@ import { setupSwipeToClose } from "./swipe-sheet.js";
 // (нова іконка пункту меню, зміна тексту тощо) не довелось синхронно
 // редагувати два місця і неминуче забути одне з них.
 // ==============================
+// Довге ім'я (буває — юзер сам вписує при реєстрації) розтягувало
+// кнопку "Привіт, X!" на всю ширину, а на вузьких екранах ще й
+// переносило текст в 2 рядки, від чого шапка "розповзалась" (див.
+// фікс висоти нижче). Обрізаємо показ до 6 символів + "…", повне ім'я
+// лишається в title, щоб його можна було побачити при наведенні.
+const MAX_GREETING_NAME_LENGTH = 6;
+
+function truncateGreetingName(name: string): string {
+  if (name.length <= MAX_GREETING_NAME_LENGTH + 1) return name;
+  return `${name.slice(0, MAX_GREETING_NAME_LENGTH)}…`;
+}
+
 export function userMenuHtml(session: SessionUser): string {
   const firstName = session.fullName.split(" ")[0];
+  const displayName = truncateGreetingName(firstName);
   const initial = firstName.charAt(0).toUpperCase();
   const isAdmin = session.role === "admin";
 
@@ -32,8 +45,8 @@ export function userMenuHtml(session: SessionUser): string {
 
   return `
     <div class="user-menu" id="user-menu">
-      <button class="user-menu__trigger" id="user-menu-trigger" aria-haspopup="true" aria-expanded="false">
-        <span>Привіт, ${firstName}!</span>
+      <button class="user-menu__trigger" id="user-menu-trigger" aria-haspopup="true" aria-expanded="false" title="${session.fullName}">
+        <span>Привіт, ${displayName}!</span>
         <span class="user-menu__avatar" aria-hidden="true">${initial}</span>
       </button>
       <div class="user-menu__backdrop" id="user-menu-backdrop"></div>

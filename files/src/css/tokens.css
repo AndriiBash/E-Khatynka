@@ -164,6 +164,47 @@ button {
 }
 
 /* ==============================
+   Бренд-марка: іконка будиночка + "Є-Хатинка." + слоган під ним.
+   Один спільний блок для топбару (index.html/admin.html), футера й
+   404 — щоб усі три місця лишались візуально синхронними.
+   Файл іконки: assets/icons/logo-house.png (додається окремо).
+   ============================== */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.brand__icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.brand__tagline {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ==============================
    Скелетони "завантаження" (переливчаста хвиля, як у YouTube/Яндекс
    Лавці) — базовий механізм тут, у спільному tokens.css, бо
    використовується і в каталозі (layout.css), і на сторінці товару

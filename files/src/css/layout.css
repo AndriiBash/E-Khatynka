@@ -37,6 +37,37 @@
   gap: var(--space-1);
 }
 
+.categories-sidebar__decor {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.categories-sidebar__decor-bread {
+  width: 80px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: var(--space-1);
+}
+
+.categories-sidebar__decor-text {
+  font-size: var(--fs-sm);
+  font-style: italic;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.categories-sidebar__decor-heart {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  margin-top: var(--space-1);
+}
+
 .categories__item {
   display: flex;
   align-items: center;
@@ -52,13 +83,13 @@
   color: var(--color-text-muted);
 }
 
+/* Просто фото категорії, без плашки-фону під ним (як у Яндекс Лавці)
+   — саме тому нема ні border-radius, ні background. */
 .categories__item-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: cover;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
 }
 
 .categories__item--active {
@@ -604,6 +635,13 @@
     display: none;
   }
 
+  /* Декоративний блок з ілюстрацією розрахований на вертикальний
+     сайдбар — у горизонтальній стрічці категорій на мобілці йому
+     просто нема природного місця. */
+  .categories-sidebar__decor {
+    display: none;
+  }
+
   .categories-list {
     flex-direction: row;
     overflow-x: auto;
@@ -638,6 +676,11 @@
   .categories__item--active {
     background: var(--color-accent);
     color: #fff;
+  }
+
+  .categories__item-icon {
+    width: 36px;
+    height: 36px;
   }
 
   .cart-panel {
@@ -892,15 +935,15 @@ body.has-open-user-menu .mobile-cart-button {
   text-align: center;
 }
 
-.site-footer__brand {
-  font-family: var(--font-display);
-  font-size: var(--fs-lg);
-  font-weight: 700;
+/* Темний фон футера — власний білий/приглушено-білий колір замість
+   стандартного .brand__name/.brand__tagline (розраховані на світлий
+   фон сторінки). */
+.site-footer .brand__name {
   color: #fff;
 }
 
-.site-footer__brand .logo-accent {
-  color: var(--color-accent);
+.site-footer .brand__tagline {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .site-footer__social {
@@ -929,6 +972,14 @@ body.has-open-user-menu .mobile-cart-button {
   .site-footer__social a:hover {
     background: var(--color-accent);
   }
+}
+
+.site-footer__admin-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: rgba(255, 255, 255, 0.75);
+  max-width: 480px;
+  line-height: 1.6;
 }
 
 .site-footer__thesis {

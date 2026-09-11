@@ -60,13 +60,27 @@ function renderCategories(): void {
   list.querySelectorAll<HTMLButtonElement>("[data-category]").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeCategory = btn.dataset.category ?? "all";
-      renderCategories();
+      // Той самий баг, що був у адмінській таблиці категорій: повний
+      // innerHTML наново пересоздавав усі <img> іконки списку, тож вони
+      // на мить зникали й підвантажувались заново при кожному виборі
+      // категорії. Замість повного renderCategories() — просто
+      // перемикаємо клас "активний" на кнопках, іконки лишаються тими
+      // самими DOM-вузлами.
+      highlightActiveCategory();
       renderProducts();
       updateHeroSubtitle();
       // Щоб одразу було видно початок нової добірки, а не той самий
       // рядок прокрутки, на якому застали попередню категорію.
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
+  });
+}
+
+function highlightActiveCategory(): void {
+  const list = document.getElementById("categories-list");
+  if (!list) return;
+  list.querySelectorAll<HTMLButtonElement>("[data-category]").forEach((btn) => {
+    btn.classList.toggle("categories__item--active", btn.dataset.category === activeCategory);
   });
 }
 

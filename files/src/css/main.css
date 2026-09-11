@@ -14,7 +14,12 @@
 }
 
 .stub__topbar {
-  height: 76px;
+  /* min-height, а не height: на вузьких екранах текст "Привіт,
+     Адміністратор!" в .user-menu__trigger переносився в 2 рядки, і
+     жорстка height не давала шапці підрости під цей вищий контент —
+     кнопка вилазила за нижню межу шапки, а border-bottom під нею
+     виглядав "недомальованим". */
+  min-height: 76px;
   display: flex;
   align-items: center;
   gap: var(--space-5);
@@ -166,18 +171,21 @@
   flex: 1;
 }
 
-.stub__logo {
-  display: flex;
-  align-items: baseline;
-  font-family: var(--font-display);
-  font-size: var(--fs-lg);
-  font-weight: 700;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
+@media (max-width: 640px) {
+  /* Звільняємо трохи місця під тегляйн — 32px паддінгу з кожного
+     боку (var(--space-6)) на 375-390px екрані з'їдають забагато. */
+  .stub__topbar {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
 
-.stub__logo-dot {
-  color: var(--color-accent);
+  /* nowrap-тегляйн на вузькому екрані пхав шапку (а з нею й увесь
+     .stub) ширшою за viewport — звідси зайвий горизонтальний скрол і
+     "паддінг" справа, найпомітніший саме в таблиці категорій. Менший
+     розмір лишає той самий один рядок, але вже влазить. */
+  .brand__tagline {
+    font-size: 0.6875rem;
+  }
 }
 
 .stub__body {
@@ -186,8 +194,195 @@
 
 /* ---- Адмін-панель (admin.html) ---- */
 
+.admin-layout {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Бічне меню (тільки десктоп — на мобілці лишається звична
+   навігація "плитки таблиць + ← Усі таблиці", без ще одної шторки
+   поверх усього іншого). ---- */
+
+.admin-sidebar {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: 240px;
+    flex-shrink: 0;
+    padding: var(--space-5) var(--space-3);
+    border-right: 1px solid var(--color-border);
+    align-self: stretch;
+  }
+}
+
+.admin-sidebar__link,
+.admin-sidebar__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  border: none;
+  background: none;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.admin-sidebar__link--active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-sidebar__link:not(.admin-sidebar__link--active):hover,
+  .admin-sidebar__group-toggle:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.admin-sidebar__icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* Кожна іконка — окремий файл в assets/icons/ (не inline SVG, щоб
+   лежали в проєкті як звичайні асети) — recolor через CSS-маску, а не
+   <img>, саме тому, щоб колір іконки й далі йшов за currentColor
+   (сірий за замовчуванням, білий на активному пункті меню) — при
+   <img src="...svg"> лежав би фіксований колір із самого файлу,
+   незалежно від того, активний пункт чи ні. */
+.admin-sidebar__icon--home {
+  -webkit-mask-image: url(../../assets/icons/admin-home.svg);
+  mask-image: url(../../assets/icons/admin-home.svg);
+}
+
+.admin-sidebar__icon--catalog {
+  -webkit-mask-image: url(../../assets/icons/admin-catalog.svg);
+  mask-image: url(../../assets/icons/admin-catalog.svg);
+}
+
+.admin-sidebar__icon--orders {
+  -webkit-mask-image: url(../../assets/icons/admin-orders.svg);
+  mask-image: url(../../assets/icons/admin-orders.svg);
+}
+
+.admin-sidebar__icon--users {
+  -webkit-mask-image: url(../../assets/icons/admin-users.svg);
+  mask-image: url(../../assets/icons/admin-users.svg);
+}
+
+.admin-sidebar__icon--warehouse {
+  -webkit-mask-image: url(../../assets/icons/admin-warehouse.svg);
+  mask-image: url(../../assets/icons/admin-warehouse.svg);
+}
+
+.admin-sidebar__icon--analytics {
+  -webkit-mask-image: url(../../assets/icons/admin-analytics.svg);
+  mask-image: url(../../assets/icons/admin-analytics.svg);
+}
+
+.admin-sidebar__icon--settings {
+  -webkit-mask-image: url(../../assets/icons/admin-settings.svg);
+  mask-image: url(../../assets/icons/admin-settings.svg);
+}
+
+.admin-sidebar__group-label {
+  flex: 1;
+}
+
+.admin-sidebar__chevron {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-image: url(../../assets/icons/admin-chevron.svg);
+  mask-image: url(../../assets/icons/admin-chevron.svg);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  transition: transform 0.15s ease;
+}
+
+.admin-sidebar__group--open .admin-sidebar__chevron {
+  transform: rotate(180deg);
+}
+
+/* grid-template-rows: 0fr -> 1fr замість max-height: за фіксованого
+   max-height відкриття/закриття виглядали по-різному (перехід рахував
+   0.2s відносно довільних 200px, а не реальної висоти ~76px вмісту —
+   закриття "зависало", потім різко ховалось). Grid-рядок анімує рівно
+   до фактичної висоти вмісту, тому відкриття й закриття виглядають
+   зовсім симетрично, без магічних чисел. */
+.admin-sidebar__group-items {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.22s ease;
+  padding-left: var(--space-6);
+}
+
+.admin-sidebar__group--open .admin-sidebar__group-items {
+  grid-template-rows: 1fr;
+}
+
+.admin-sidebar__group-items-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Обов'язково: grid-елемент інакше не стискається нижче за розмір
+     свого вмісту (default min-height: auto), і 0fr не спрацював би. */
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-sidebar__sublink {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.admin-sidebar__sublink--active {
+  color: var(--color-accent-dark);
+  font-weight: 700;
+  background: var(--color-surface-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-sidebar__sublink:not(.admin-sidebar__sublink--active):hover {
+    background: var(--color-surface-muted);
+  }
+}
+
 .admin-page {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
 }
@@ -201,7 +396,7 @@
   max-width: 640px;
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-4);
   box-shadow: var(--shadow-card);
 }
 
@@ -219,9 +414,8 @@
 .admin-table-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
-  max-width: 900px;
+  max-width: 1400px;
   margin-bottom: var(--space-4);
 }
 
@@ -233,8 +427,218 @@
   flex-shrink: 0;
 }
 
+/* Список зліва + панель перегляду обраного запису справа (та сама
+   ідея, що на референсі "Продукти") — на вузьких екранах панель
+   переноситься під список (flex-wrap), окремої мобільної версії не
+   робили. */
+.admin-categories-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-4);
+  max-width: 1400px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
 .admin-section--wide {
-  max-width: 900px;
+  flex: 1 1 560px;
+  /* .admin-section обмежує все до 640px — тут таблиці явно тісно,
+     тож розширюємо саме "широку" секцію. */
+  max-width: 960px;
+  min-width: 0;
+}
+
+.admin-preview {
+  flex: 1 1 300px;
+  max-width: 380px;
+  position: sticky;
+  top: calc(76px + var(--space-4));
+}
+
+.admin-preview-empty {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+  padding: var(--space-6) 0;
+}
+
+.admin-preview__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.admin-preview__name {
+  font-size: var(--fs-md);
+}
+
+.admin-preview__id {
+  flex-shrink: 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-preview__icon,
+.admin-preview__icon--placeholder {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  margin-bottom: var(--space-4);
+}
+
+.admin-preview__field-label {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.admin-preview__field-value {
+  margin: 0;
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.admin-preview__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.admin-preview__actions .btn {
+  flex: 1;
+}
+
+/* ---- Пошук над таблицею ---- */
+
+.admin-table-toolbar {
+  margin-bottom: var(--space-4);
+}
+
+/* Обгортка потрібна лише для позиціювання кнопки "очистити" всередині
+   поля — саме поле лишається звичайним <input>. */
+.admin-search-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+}
+
+.admin-table-search {
+  width: 100%;
+  max-width: 320px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+
+.admin-search-wrap .admin-table-search {
+  /* Місце під кнопку "×" праворуч, щоб текст під неї не заїжджав. */
+  max-width: none;
+  padding-right: calc(var(--space-4) + 28px);
+}
+
+.admin-table-search:focus {
+  border-color: var(--color-accent);
+}
+
+/* Кнопка очистки — з'являється, лише коли в полі щось введено (клас
+   керується з JS: .admin-search-clear--visible). display:none за
+   замовчуванням, щоб порожнє поле не показувало зайву "×". */
+.admin-search-clear {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0;
+  cursor: pointer;
+}
+
+.admin-search-clear svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-search-clear:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.admin-search-clear--visible {
+  display: flex;
+}
+
+/* ---- Пагінація ---- */
+
+.admin-pagination {
+  margin-top: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.admin-pagination__summary {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.admin-pagination__page,
+.admin-pagination__arrow {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.admin-pagination__page--active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.admin-pagination__arrow:disabled {
+  opacity: 0.35;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-pagination__page:not(.admin-pagination__page--active):hover,
+  .admin-pagination__arrow:not(:disabled):hover {
+    background: var(--color-surface-muted);
+  }
 }
 
 /* Той самий вигляд, що й у порожнього кошика (.cart-empty) — щоб
@@ -344,6 +748,40 @@
   border-bottom: none;
 }
 
+.admin-table__id-cell {
+  width: 48px;
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+}
+
+.admin-table__skeleton-id {
+  display: block;
+  width: 16px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.admin-table__skeleton-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.admin-table__skeleton-name {
+  display: block;
+  width: 110px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.admin-table__skeleton-description {
+  display: block;
+  width: 170px;
+  height: 14px;
+  border-radius: 4px;
+}
+
 .admin-table__icon-cell {
   width: 44px;
 }
@@ -360,29 +798,71 @@
 
 .admin-table__name-cell {
   font-weight: 600;
-  white-space: nowrap;
-}
-
-.admin-table__description-cell {
-  color: var(--color-text-muted);
-  max-width: 320px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.admin-table__actions-cell {
-  text-align: right;
+.admin-table__description-cell {
+  color: var(--color-text-muted);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Квадратні заокруглені кнопки з іконкою замість тексту — і на
+   мобілці, і на десктопі: у стовпці дій елементарно бракує місця під
+   слова "Переглянути"/"Редагувати"/"Видалити" одне поряд з одним,
+   особливо коли таблицю ще й розширили. Підпис лишається в розмітці
+   (.admin-table__action-label) лише для скрінрідерів — кнопка й так
+   має aria-label. */
+.admin-table__actions-cell {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* Рядок обраної для перегляду категорії — той самий світлий акцент,
+   що на активному пункті бічного меню. */
+.admin-table__row--active td {
+  background: var(--color-surface-muted);
+}
+
+/* Клікабельність усього рядка (відкриває перегляд) — лише курсор і
+   підсвітка при наведенні, сам клік вішається з JS і тільки на
+   пристроях з мишею (див. renderCategoriesTableBody). */
+@media (hover: hover) and (pointer: fine) {
+  .admin-table tbody tr[data-row-id] {
+    cursor: pointer;
+  }
+
+  .admin-table tbody tr[data-row-id]:hover td {
+    background: var(--color-surface-muted);
+  }
+}
+
+.admin-table__preview-btn,
 .admin-table__edit-btn,
 .admin-table__delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   border: none;
-  background: none;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: var(--color-surface-muted);
+  /* Легка тінь — без неї кнопки на мобілці зливаються з фоном картки
+     (той самий приглушений теплий колір). */
+  box-shadow: 0 1px 3px rgba(43, 29, 20, 0.16);
+}
+
+.admin-table__preview-btn {
+  color: var(--color-text-muted);
 }
 
 .admin-table__edit-btn {
@@ -393,46 +873,53 @@
   color: var(--color-error);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .admin-table__preview-btn:hover,
+  .admin-table__edit-btn:hover,
+  .admin-table__delete-btn:hover {
+    background: var(--color-border);
+  }
+}
+
 .admin-table__action-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.admin-table__action-label {
+  /* Лишаємо в DOM для скрінрідерів (кнопка вже має aria-label, тож це
+     не єдине джерело підпису, але дублювати текстом на екрані вже
+     нема місця). */
   display: none;
 }
 
-@media (max-width: 640px) {
-  .admin-table {
-    display: block;
+/* Той самий запобіжник, що й нижче для телефону, але для планшетів
+   (iPad 11" в портреті/альбомі — 834–1194px — раніше сюди не влучав
+   жоден з двох брейкпоінтів: <640px і >=901px, тож на цій ширині
+   таблиця могла вилізти за межі картки й "виштовхнути" кнопки дій).
+   Навіть якщо стовпці десь не влізуть тютелька в тютельку — тепер
+   таблиця просто скролиться в себе, а не ламає layout навколо. */
+@media (max-width: 1024px) {
+  #admin-categories-table-wrap {
+    max-width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Поле пошуку — на всю ширину картки замість фіксованих 320px. */
+  .admin-search-wrap {
+    max-width: none;
   }
 
-  /* На мобілці — квадратні заокруглені кнопки з іконкою замість
-     тексту (тексту в такому вузькому стовпці елементарно бракує
-     місця, а самих слів "Редагувати"/"Видалити" при двох кнопках
-     поспіль забагато). */
-  .admin-table__actions-cell {
-    display: flex;
-    gap: var(--space-2);
-    justify-content: flex-end;
-  }
-
-  .admin-table__edit-btn,
-  .admin-table__delete-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-muted);
-  }
-
-  .admin-table__action-icon {
-    display: block;
-    width: 18px;
-    height: 18px;
-  }
-
-  .admin-table__action-label {
-    display: none;
+  /* iOS Safari сам зумить сторінку при фокусі на будь-якому інпуті з
+     font-size < 16px — саме тому був той "автозум" на полі пошуку.
+     16px тут лишається лише на тач-екранах, щоб на десктопі поле не
+     виглядало крупнішим за решту дрібного тексту таблиці. */
+  .admin-table-search {
+    font-size: 16px;
   }
 }
 
@@ -514,8 +1001,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  height: 44px;
-  padding: 0 var(--space-2) 0 var(--space-4);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: none;
   /* Та сама мова скруглень, що й у "Увійти"/"Оформити" — це якраз та
      кнопка, яку не встигли поправити минулого разу. */

@@ -310,7 +310,7 @@ function setupLogoHome(): void {
   // 404.html — там немає JS, який би це підмінив). Тут ми на самій
   // головній сторінці, тож перехід на той самий index.html замінюємо на
   // плавний скрол угору — без зайвого перезавантаження сторінки.
-  const logo = document.querySelector<HTMLAnchorElement>(".stub__logo");
+  const logo = document.querySelector<HTMLAnchorElement>(".stub__topbar .brand");
   if (!logo) return;
 
   logo.addEventListener("click", (e) => {
