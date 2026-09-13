@@ -408,19 +408,41 @@
 .admin-section__hint {
   color: var(--color-text-muted);
   font-size: var(--fs-sm);
-  margin: 0 0 var(--space-5);
+  margin: 0;
 }
 
-.admin-table-header {
+/* Рядок "підказка + кнопка додати" всередині картки таблиці (замість
+   попереднього .admin-table-header на всю ширину сторінки — там кнопка
+   опинялась аж над панеллю перегляду праворуч, а не біля своєї ж
+   таблиці). Тепер кнопка завжди прив'язана до правого краю саме цієї
+   картки, а не всього рядка з обома колонками. */
+.admin-section__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: var(--space-3);
   gap: var(--space-4);
-  max-width: 1400px;
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
-.admin-table-header .admin-page__title {
-  margin-bottom: 0;
+.admin-section__header .admin-section__hint {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.admin-section__header .admin-add-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  /* На вузькому екрані підказка й кнопка й так переносяться в 2 рядки
+     (через flex-wrap вище) — тож кнопці є сенс тягнутись на всю
+     ширину картки замість того, щоб лишатись розміром під текст. */
+  .admin-section__header .admin-add-btn {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 .admin-add-btn {
@@ -454,6 +476,25 @@
   max-width: 380px;
   position: sticky;
   top: calc(76px + var(--space-4));
+}
+
+/* Анімація появи заповненого перегляду — і при першому виборі запису
+   (перехід від "Оберіть..." до карточки з даними), і при перемиканні
+   між записами (клас перезапускається щоразу — animatePreviewPanelIn
+   в admin.ts). Легкий підйом+прояснення, без стрибків розмірів. */
+@keyframes admin-preview-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-preview--enter {
+  animation: admin-preview-enter 0.22s ease-out;
 }
 
 .admin-preview-empty {
@@ -726,6 +767,10 @@
 .admin-table {
   width: 100%;
   border-collapse: collapse;
+  /* fixed — щоб ширини колонок бралися з <colgroup>, однаково для
+     кожного рядка (див. коментар біля CATEGORY_TABLE_COLGROUP в
+     admin.ts), а не перераховувались під контент кожного рядка окремо. */
+  table-layout: fixed;
 }
 
 .admin-table th {
@@ -804,6 +849,33 @@
   white-space: nowrap;
 }
 
+/* Клітинка з двома рядками (імʼя + email) у "Вподобаннях
+   користувачів" — на відміну від .admin-table__name-cell, тут навмисно
+   НЕ nowrap: email під іменем має право переноситись власним рядком,
+   а не обрізатись «…» разом з іменем. */
+.admin-table__user-cell {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.admin-table__user-name {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-table__subtext {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-table__description-cell {
   color: var(--color-text-muted);
   max-width: 110px;
@@ -818,7 +890,15 @@
    особливо коли таблицю ще й розширили. Підпис лишається в розмітці
    (.admin-table__action-label) лише для скрінрідерів — кнопка й так
    має aria-label. */
-.admin-table__actions-cell {
+/* Раніше display:flex стояв прямо на <td> — але це "виламує" клітинку
+   з table-моделі (вона більше не table-cell), тому vertical-align:
+   middle з .admin-table td переставав діяти, і коли інша клітинка в
+   тому ж рядку була вища (наприклад двовядкове імʼя+email у
+   "Вподобаннях"), кнопки дій лишались притиснуті до верху комірки
+   замість центру — звідти й той "дивний паддинг" знизу під кнопками.
+   Тепер td лишається звичайним table-cell (і центрується вертикально
+   як завжди), а flex-рядок — на внутрішньому .admin-table__actions. */
+.admin-table__actions {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
@@ -885,6 +965,35 @@
   display: block;
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+  /* Раніше це були inline <svg> зі stroke="currentColor" — колір
+     керувався через CSS кожної кнопки (превʼю/редагування/видалення
+     пофарбовані по-різному). Винесли іконки у файли
+     assets/icons/admin-*.svg, тож тепер так само керуємо кольором
+     через mask-image + background-color, як і іконки бічного меню
+     (.admin-sidebar__icon вище). */
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.admin-table__action-icon--preview {
+  -webkit-mask-image: url(../../assets/icons/admin-preview.svg);
+  mask-image: url(../../assets/icons/admin-preview.svg);
+}
+
+.admin-table__action-icon--edit {
+  -webkit-mask-image: url(../../assets/icons/admin-edit.svg);
+  mask-image: url(../../assets/icons/admin-edit.svg);
+}
+
+.admin-table__action-icon--delete {
+  -webkit-mask-image: url(../../assets/icons/admin-delete.svg);
+  mask-image: url(../../assets/icons/admin-delete.svg);
 }
 
 .admin-table__action-label {
@@ -899,9 +1008,12 @@
    жоден з двох брейкпоінтів: <640px і >=901px, тож на цій ширині
    таблиця могла вилізти за межі картки й "виштовхнути" кнопки дій).
    Навіть якщо стовпці десь не влізуть тютелька в тютельку — тепер
-   таблиця просто скролиться в себе, а не ламає layout навколо. */
+   таблиця просто скролиться в себе, а не ламає layout навколо.
+   Той самий клас на всіх трьох wrap-ах (категорії/теги/вподобання) —
+   при додаванні четвертої таблиці з колонками досить лише навісити
+   .admin-table-wrap, а не пригадувати цей блок і дописувати ще один id. */
 @media (max-width: 1024px) {
-  #admin-categories-table-wrap {
+  .admin-table-wrap {
     max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1012,6 +1124,25 @@
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-text);
+}
+
+/* Повне імʼя — лише на "десктопі" (той самий 640px-поріг, що й скрізь
+   у проєкті відділяє мобільну шторку меню від десктопного дропдауна).
+   На мобілці лишається коротка версія (обрізана до 6 символів +
+   "…" — див. truncateGreetingName), бо вузькому екрану не вистачає
+   місця під повне імʼя без переносу в 2 рядки. */
+.user-menu__greeting-short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .user-menu__greeting-full {
+    display: none;
+  }
+
+  .user-menu__greeting-short {
+    display: inline;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1553,6 +1684,119 @@ body.has-open-user-menu .mobile-search {
   color: var(--color-text-muted);
   font-size: var(--fs-sm);
   margin-bottom: var(--space-5);
+}
+
+/* ---- "Мої вподобання" — список тегів з тумблерами (user-menu.ts) ---- */
+
+.auth-modal__dialog--prefs {
+  max-width: 480px;
+}
+
+.pref-toggle-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pref-toggle-list__status {
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  padding: var(--space-4) 0;
+  text-align: center;
+}
+
+.pref-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pref-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.pref-toggle-row__icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-surface-muted);
+}
+
+.pref-toggle-row__icon--placeholder {
+  display: block;
+}
+
+.pref-toggle-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Тумблер — той самий "Яндекс-стиль", пилюлька + кружечок, що їде
+   вправо/вліво. Замість чекбокса напряму (важко стилізувати нативно
+   й по-різному в браузерах) — ховаємо input, а перемикаємо вигляд
+   сусіднього .switch__track через :checked. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.switch__track {
+  position: absolute;
+  inset: 0;
+  background: var(--color-border);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.switch__track::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(43, 29, 20, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.switch__input:checked + .switch__track {
+  background: var(--color-accent);
+}
+
+.switch__input:checked + .switch__track::before {
+  transform: translateX(18px);
+}
+
+.switch__input:disabled + .switch__track {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.switch__input:focus-visible + .switch__track {
+  outline: 2px solid var(--color-accent-dark);
+  outline-offset: 2px;
 }
 
 .auth-modal__switch {

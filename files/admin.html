@@ -53,6 +53,7 @@
             <div class="admin-sidebar__group-items-inner">
               <a class="admin-sidebar__sublink" href="#/table/products" data-nav="products">Продукти</a>
               <a class="admin-sidebar__sublink" href="#/table/categories" data-nav="categories">Категорії</a>
+              <a class="admin-sidebar__sublink" href="#/table/tags" data-nav="tags">Теги</a>
             </div>
           </div>
         </div>
@@ -62,10 +63,19 @@
           Замовлення
         </a>
 
-        <a class="admin-sidebar__link" href="#/table/users" data-nav="users">
-          <span class="admin-sidebar__icon admin-sidebar__icon--users" aria-hidden="true"></span>
-          Користувачі
-        </a>
+        <div class="admin-sidebar__group">
+          <button class="admin-sidebar__group-toggle" type="button" data-group-toggle="users">
+            <span class="admin-sidebar__icon admin-sidebar__icon--users" aria-hidden="true"></span>
+            <span class="admin-sidebar__group-label">Користувачі</span>
+            <span class="admin-sidebar__chevron" aria-hidden="true"></span>
+          </button>
+          <div class="admin-sidebar__group-items" id="admin-sidebar-group-users">
+            <div class="admin-sidebar__group-items-inner">
+              <a class="admin-sidebar__sublink" href="#/table/users" data-nav="users">Користувачі</a>
+              <a class="admin-sidebar__sublink" href="#/table/user_tag_preferences" data-nav="user_tag_preferences">Вподобання</a>
+            </div>
+          </div>
+        </div>
 
         <div class="admin-sidebar__group">
           <button class="admin-sidebar__group-toggle" type="button" data-group-toggle="stock">
@@ -166,6 +176,63 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="admin-tag-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-tag-modal-title">
+      <button class="auth-modal__close" id="admin-tag-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-tag-modal-title">Додати тег</h2>
+      <form id="admin-tag-form" novalidate>
+        <div class="field">
+          <label for="admin-tag-name">Назва тегу</label>
+          <input type="text" id="admin-tag-name" name="name" autocomplete="off" />
+          <span class="field-error" id="admin-tag-name-error"></span>
+        </div>
+        <div class="field">
+          <label>Іконка (необов'язково)</label>
+          <div class="admin-icon-picker">
+            <span class="admin-icon-picker__preview-slot" id="admin-tag-icon-preview"></span>
+            <label class="admin-icon-picker__pick-btn" for="admin-tag-icon-file">Обрати файл</label>
+            <input class="admin-icon-picker__input" type="file" id="admin-tag-icon-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" />
+            <button class="admin-icon-picker__clear" id="admin-tag-icon-clear" type="button" hidden>Прибрати</button>
+            <span class="admin-icon-picker__status" id="admin-tag-icon-status"></span>
+          </div>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-tag-modal-submit">Додати тег</button>
+        <p class="form-message" id="admin-tag-message"></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="admin-pref-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-pref-modal-title">
+      <button class="auth-modal__close" id="admin-pref-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-pref-modal-title">Додати вподобання</h2>
+      <form id="admin-pref-form" novalidate>
+        <div class="field">
+          <label for="admin-pref-user">Користувач</label>
+          <select id="admin-pref-user" name="userId"></select>
+          <span class="field-error" id="admin-pref-user-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-pref-tag">Тег</label>
+          <select id="admin-pref-tag" name="tagId"></select>
+          <span class="field-error" id="admin-pref-tag-error"></span>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-pref-modal-submit">Додати вподобання</button>
+        <p class="form-message" id="admin-pref-message"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="auth-modal" id="admin-delete-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-modal-title">
@@ -174,7 +241,7 @@
           <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <h2 id="admin-delete-modal-title">Видалити категорію?</h2>
+      <h2 id="admin-delete-modal-title">Видалити?</h2>
       <p class="auth-modal__subtitle" id="admin-delete-modal-text">Цю дію не можна скасувати.</p>
       <div class="clear-cart-modal__actions">
         <button class="btn btn--ghost" id="admin-delete-modal-cancel" type="button">Скасувати</button>

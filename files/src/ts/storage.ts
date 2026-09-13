@@ -1,4 +1,4 @@
-import type { SessionUser, ApiCategory } from "./types.js";
+import type { SessionUser, ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser } from "./types.js";
 
 // ==============================
 // Клієнт до реального backend API (server.js + SQLite, /api/*).
@@ -162,7 +162,7 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-export async function uploadCategoryIcon(file: File): Promise<UploadIconResult> {
+export async function uploadIcon(file: File, kind: "categories" | "tags"): Promise<UploadIconResult> {
   let dataBase64: string;
   try {
     dataBase64 = await readFileAsBase64(file);
@@ -176,7 +176,7 @@ export async function uploadCategoryIcon(file: File): Promise<UploadIconResult> 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ mimeType: file.type, dataBase64 }),
+      body: JSON.stringify({ mimeType: file.type, dataBase64, kind }),
     });
   } catch {
     return { ok: false, error: NETWORK_ERROR };
@@ -184,6 +184,199 @@ export async function uploadCategoryIcon(file: File): Promise<UploadIconResult> 
 
   try {
     return (await res.json()) as UploadIconResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function uploadCategoryIcon(file: File): Promise<UploadIconResult> {
+  return uploadIcon(file, "categories");
+}
+
+// ==============================
+// Теги — той самий патерн, що й категорії, без опису.
+// ==============================
+
+export async function getTags(): Promise<ApiTag[]> {
+  try {
+    const res = await fetch("/api/tags", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { tags: ApiTag[] };
+    return data.tags;
+  } catch {
+    return [];
+  }
+}
+
+export type TagResult = { ok: true; tag: ApiTag } | { ok: false; error: string };
+
+async function postOrPutTag(
+  url: string,
+  method: "POST" | "PUT",
+  input: { name: string; iconUrl: string }
+): Promise<TagResult> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as TagResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function createTag(input: { name: string; iconUrl: string }): Promise<TagResult> {
+  return postOrPutTag("/api/admin/tags", "POST", input);
+}
+
+export async function updateTag(id: number, input: { name: string; iconUrl: string }): Promise<TagResult> {
+  return postOrPutTag(`/api/admin/tags/${id}`, "PUT", input);
+}
+
+export async function deleteTag(id: number): Promise<DeleteResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/tags/${id}`, { method: "DELETE", credentials: "include" });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
+// Вподобання користувачів (user_tag_preferences).
+// ==============================
+
+export async function getUserTagPreferences(): Promise<ApiUserTagPreference[]> {
+  try {
+    const res = await fetch("/api/admin/user-tag-preferences", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; preferences?: ApiUserTagPreference[] };
+    return data.preferences ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type UserTagPreferenceResult =
+  | { ok: true; preference: ApiUserTagPreference }
+  | { ok: false; error: string };
+
+export async function createUserTagPreference(input: {
+  userId: string;
+  tagId: number;
+}): Promise<UserTagPreferenceResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/admin/user-tag-preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as UserTagPreferenceResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function updateUserTagPreference(
+  id: number,
+  input: { userId: string; tagId: number }
+): Promise<UserTagPreferenceResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/user-tag-preferences/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as UserTagPreferenceResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function deleteUserTagPreference(id: number): Promise<DeleteResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/user-tag-preferences/${id}`, { method: "DELETE", credentials: "include" });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// Легкий список користувачів — для селектора у формі вподобань вище.
+export async function getAdminUsers(): Promise<ApiAdminUser[]> {
+  try {
+    const res = await fetch("/api/admin/users", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; users?: ApiAdminUser[] };
+    return data.users ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// ==============================
+// "Мої вподобання" — покупець керує власними тегами сам, з меню
+// користувача (user-menu.ts). На відміну від адмінських функцій вище,
+// тут немає id окремого запису — сервер сам визначає рядок по
+// user_id із сесії (cookie), клієнт лише каже "цей tagId — увімкнено
+// чи вимкнено".
+// ==============================
+
+export async function getMyTagPreferenceIds(): Promise<number[]> {
+  try {
+    const res = await fetch("/api/me/tag-preferences", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; tagIds?: number[] };
+    return data.tagIds ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function setMyTagPreference(tagId: number, enabled: boolean): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/me/tag-preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ tagId, enabled }),
+    });
+    return (await res.json()) as { ok: boolean; error?: string };
   } catch {
     return { ok: false, error: NETWORK_ERROR };
   }

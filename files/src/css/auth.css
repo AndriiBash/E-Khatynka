@@ -125,7 +125,8 @@
 .field input[type="text"],
 .field input[type="email"],
 .field input[type="tel"],
-.field input[type="password"] {
+.field input[type="password"],
+.field select {
   width: 100%;
   height: 46px;
   border-radius: var(--radius-sm);
@@ -137,7 +138,8 @@
   color: var(--color-text);
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--color-accent);
 }
 

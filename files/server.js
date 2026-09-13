@@ -31,6 +31,43 @@ const db = new DatabaseSync(DB_PATH);
 // вимкнено в самому SQLite, і node:sqlite не вмикає сам).
 db.exec("PRAGMA foreign_keys = ON;");
 
+// ---- Міграція під оновлену ER-діаграму (тип-таблиця інгредієнтів
+// прибрана, вподобання користувачів тепер по тегах, а не по типу
+// інгредієнта) — виконується ДО CREATE TABLE IF NOT EXISTS нижче,
+// інакше стара версія цих таблиць просто лишилась би як є.
+// Ingredients/ingredient_types/user_ingredient_preferences на бойовій
+// базі порожні (склад ще не наповнювали), тож дропаємо без бекапу; але
+// про всяк випадок рахуємо рядки й пишемо в консоль, якщо там щось є.
+function tableExists(name) {
+  return !!db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+}
+
+function columnExists(table, column) {
+  return db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .some((c) => c.name === column);
+}
+
+if (tableExists("ingredients") && columnExists("ingredients", "ingredient_type_id")) {
+  const { n } = db.prepare("SELECT COUNT(*) AS n FROM ingredients").get();
+  if (n > 0) {
+    console.warn(
+      `Міграція схеми: у старій таблиці ingredients було ${n} рядків з ingredient_type_id — ` +
+        "ця колонка прибрана новою ER-діаграмою, дані буде втрачено."
+    );
+  }
+  db.exec("DROP TABLE ingredients;");
+}
+
+if (tableExists("ingredient_types")) {
+  db.exec("DROP TABLE ingredient_types;");
+}
+
+if (tableExists("user_ingredient_preferences")) {
+  db.exec("DROP TABLE user_ingredient_preferences;");
+}
+
 // Схема з ER-діаграми (users/sessions лишились як були — щоб не зламати
 // вже написані /api/register, /api/login тощо; role/expires_at додані
 // нові поля з діаграми). Всі інші таблиці — новий каталог/кошик/
@@ -159,19 +196,15 @@ db.exec(`
     UNIQUE (user_id, product_id)
   );
 
-  CREATE TABLE IF NOT EXISTS ingredient_types (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
-  );
-
+  -- Оновлена ER-діаграма прибрала "Типи інгредієнтів" як окрему
+  -- сутність — обмеження за вподобаннями тепер на рівні тегів (нижче),
+  -- а не типу інгредієнта, тож ingredient_type_id тут теж пішов геть.
   CREATE TABLE IF NOT EXISTS ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ingredient_type_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     unit TEXT NOT NULL,
     stock_quantity REAL NOT NULL DEFAULT 0,
-    low_stock_threshold REAL,
-    FOREIGN KEY (ingredient_type_id) REFERENCES ingredient_types(id)
+    low_stock_threshold REAL
   );
 
   -- Норма витрати: скільки ingredient_id має йти на один product_id.
@@ -203,17 +236,35 @@ db.exec(`
     FOREIGN KEY (product_id) REFERENCES products(id)
   );
 
-  -- "Не хочу продукти з такими інгредієнтами в каталозі/рекомендаціях"
-  -- на рівні ТИПУ інгредієнта (алергії/дієтичні обмеження), не
-  -- конкретного інгредієнта — так і задумано.
-  CREATE TABLE IF NOT EXISTS user_ingredient_preferences (
+  -- Нове з ER-діаграми: теги (наприклад "гостре", "веганське",
+  -- "без глютену") — вішаються на продукти через product_tags і
+  -- використовуються у вподобаннях користувачів нижче.
+  CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    icon_url TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS product_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (tag_id) REFERENCES tags(id),
+    UNIQUE (product_id, tag_id)
+  );
+
+  -- "Не хочу продукти з таким тегом в каталозі/рекомендаціях" — те
+  -- саме, що раніше user_ingredient_preferences, але тепер по tag_id
+  -- замість ingredient_type_id (сама ER-діаграма так змінилась).
+  CREATE TABLE IF NOT EXISTS user_tag_preferences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    ingredient_type_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (ingredient_type_id) REFERENCES ingredient_types(id),
-    UNIQUE (user_id, ingredient_type_id)
+    FOREIGN KEY (tag_id) REFERENCES tags(id),
+    UNIQUE (user_id, tag_id)
   );
 `);
 
@@ -511,17 +562,21 @@ app.delete("/api/admin/categories/:id", requireAdmin, (req, res) => {
 });
 
 // ==============================
-// Завантаження іконки категорії.
+// Завантаження іконки (категорії чи тегу — kind у тілі запиту).
 //
 // Без multer (щоб не тягнути ще одну залежність): клієнт сам читає
 // обраний файл у base64 (FileReader.readAsDataURL) і шле звичайним
 // JSON-POST. Тут — декодуємо назад у Buffer і кладемо файл у
-// assets/icons/categories/, з новим безпечним ім'ям (не довіряємо
+// assets/icons/<kind>/, з новим безпечним ім'ям (не довіряємо
 // оригінальному імені файлу від клієнта).
 // ==============================
 
-const CATEGORY_ICON_DIR = path.join(__dirname, "assets", "icons", "categories");
-const CATEGORY_ICON_URL_PREFIX = "assets/icons/categories/";
+// Білий список — те саме, що ADMIN_TABLES нижче: жодного довільного
+// шляху від клієнта, лише ці дві директорії.
+const ICON_KIND_DIRS = {
+  categories: "categories",
+  tags: "tags",
+};
 const MAX_ICON_BYTES = 3 * 1024 * 1024; // 3MB — з запасом для іконки
 
 const ICON_MIME_TO_EXT = {
@@ -532,11 +587,14 @@ const ICON_MIME_TO_EXT = {
   "image/svg+xml": "svg",
 };
 
-// Прибираємо файл іконки лише якщо він лежить у "нашій" папці
-// (assets/icons/categories) — щоб не видалити щось за довільним
-// зовнішнім посиланням, яке хтось міг вписати вручну через API напряму.
+// Прибираємо файл іконки лише якщо він лежить у одній з "наших" папок
+// (assets/icons/categories чи assets/icons/tags) — щоб не видалити щось
+// за довільним зовнішнім посиланням, яке хтось міг вписати вручну через
+// API напряму.
 function deleteOwnedIconFile(iconUrl) {
-  if (typeof iconUrl !== "string" || !iconUrl.startsWith(CATEGORY_ICON_URL_PREFIX)) return;
+  if (typeof iconUrl !== "string") return;
+  const ownedPrefix = Object.values(ICON_KIND_DIRS).find((dir) => iconUrl.startsWith(`assets/icons/${dir}/`));
+  if (!ownedPrefix) return;
   try {
     fs.unlinkSync(path.join(__dirname, iconUrl));
   } catch {
@@ -545,8 +603,9 @@ function deleteOwnedIconFile(iconUrl) {
 }
 
 app.post("/api/admin/upload-icon", requireAdmin, (req, res) => {
-  const { mimeType, dataBase64 } = req.body || {};
+  const { mimeType, dataBase64, kind } = req.body || {};
 
+  const dir = ICON_KIND_DIRS[kind] || ICON_KIND_DIRS.categories; // без kind — стара поведінка (категорії)
   const ext = ICON_MIME_TO_EXT[mimeType];
   if (!ext) {
     return res.json({ ok: false, error: "Непідтримуваний формат (потрібен PNG, JPG, WEBP, GIF або SVG)" });
@@ -567,11 +626,306 @@ app.post("/api/admin/upload-icon", requireAdmin, (req, res) => {
     return res.json({ ok: false, error: "Файл завеликий (максимум 3MB)" });
   }
 
-  fs.mkdirSync(CATEGORY_ICON_DIR, { recursive: true });
+  const targetDir = path.join(__dirname, "assets", "icons", dir);
+  fs.mkdirSync(targetDir, { recursive: true });
   const filename = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
-  fs.writeFileSync(path.join(CATEGORY_ICON_DIR, filename), buffer);
+  fs.writeFileSync(path.join(targetDir, filename), buffer);
 
-  res.json({ ok: true, url: `${CATEGORY_ICON_URL_PREFIX}${filename}` });
+  res.json({ ok: true, url: `assets/icons/${dir}/${filename}` });
+});
+
+// ==============================
+// Теги — та сама механіка, що й категорії (без опису: за
+// ER-діаграмою в тегів лише name + icon_url).
+// ==============================
+
+function toTag(row) {
+  return { id: row.id, name: row.name, iconUrl: row.icon_url };
+}
+
+function findTagByName(name, excludeId) {
+  const rows = db.prepare("SELECT * FROM tags").all();
+  const normalized = name.trim().toLowerCase();
+  return rows.find((r) => r.id !== excludeId && r.name.trim().toLowerCase() === normalized) || null;
+}
+
+// Публічний список — знадобиться на вітрині (фільтр за тегами,
+// позначки на картці продукту тощо).
+app.get("/api/tags", (req, res) => {
+  const rows = db.prepare("SELECT * FROM tags ORDER BY id ASC").all();
+  res.json({ tags: rows.map(toTag) });
+});
+
+app.post("/api/admin/tags", requireAdmin, (req, res) => {
+  const { name, iconUrl } = req.body || {};
+
+  if (typeof name !== "string" || name.trim().length < 2) {
+    return res.json({ ok: false, error: "Введіть назву тегу (мінімум 2 символи)" });
+  }
+
+  const trimmedName = name.trim();
+
+  if (findTagByName(trimmedName, null)) {
+    return res.json({ ok: false, error: "Тег з такою назвою вже існує" });
+  }
+
+  const trimmedIconUrl = typeof iconUrl === "string" && iconUrl.trim().length > 0 ? iconUrl.trim() : null;
+
+  const result = db.prepare("INSERT INTO tags (name, icon_url) VALUES (?, ?)").run(trimmedName, trimmedIconUrl);
+
+  const row = db.prepare("SELECT * FROM tags WHERE id = ?").get(result.lastInsertRowid);
+  res.json({ ok: true, tag: toTag(row) });
+});
+
+app.put("/api/admin/tags/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id тегу" });
+  }
+
+  const existing = db.prepare("SELECT * FROM tags WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Тег не знайдено" });
+  }
+
+  const { name, iconUrl } = req.body || {};
+
+  if (typeof name !== "string" || name.trim().length < 2) {
+    return res.json({ ok: false, error: "Введіть назву тегу (мінімум 2 символи)" });
+  }
+
+  const trimmedName = name.trim();
+
+  if (findTagByName(trimmedName, id)) {
+    return res.json({ ok: false, error: "Тег з такою назвою вже існує" });
+  }
+
+  const trimmedIconUrl = typeof iconUrl === "string" && iconUrl.trim().length > 0 ? iconUrl.trim() : null;
+
+  if (existing.icon_url && existing.icon_url !== trimmedIconUrl) {
+    deleteOwnedIconFile(existing.icon_url);
+  }
+
+  db.prepare("UPDATE tags SET name = ?, icon_url = ? WHERE id = ?").run(trimmedName, trimmedIconUrl, id);
+
+  const row = db.prepare("SELECT * FROM tags WHERE id = ?").get(id);
+  res.json({ ok: true, tag: toTag(row) });
+});
+
+app.delete("/api/admin/tags/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id тегу" });
+  }
+
+  const existing = db.prepare("SELECT * FROM tags WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Тег не знайдено" });
+  }
+
+  db.prepare("DELETE FROM tags WHERE id = ?").run(id);
+  deleteOwnedIconFile(existing.icon_url);
+
+  res.json({ ok: true });
+});
+
+// ==============================
+// Вподобання користувачів (user_tag_preferences) — теги, продукти з
+// якими користувач ХОЧЕ бачити в каталозі й рекомендаціях (улюблені
+// теги, а не "заборонені" — важливо не переплутати напрямок і в
+// текстах на клієнті). Адмін тут бачить і керує усіма записами; сам
+// покупець керує лише своїми — через /api/me/tag-preferences нижче.
+// ==============================
+
+function requireAuth(req, res, next) {
+  const user = getUserByToken(req.cookies[COOKIE_NAME]);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: "Потрібно увійти в акаунт" });
+  }
+  req.currentUser = user;
+  next();
+}
+
+function toUserTagPreference(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userFullName: row.user_full_name,
+    userEmail: row.user_email,
+    tagId: row.tag_id,
+    tagName: row.tag_name,
+    tagIconUrl: row.tag_icon_url,
+    createdAt: row.created_at,
+  };
+}
+
+const USER_TAG_PREFERENCE_SELECT = `
+  SELECT
+    p.id AS id,
+    p.user_id AS user_id,
+    u.full_name AS user_full_name,
+    u.email AS user_email,
+    p.tag_id AS tag_id,
+    t.name AS tag_name,
+    t.icon_url AS tag_icon_url,
+    p.created_at AS created_at
+  FROM user_tag_preferences p
+  JOIN users u ON u.id = p.user_id
+  JOIN tags t ON t.id = p.tag_id
+`;
+
+app.get("/api/admin/user-tag-preferences", requireAdmin, (req, res) => {
+  const rows = db.prepare(`${USER_TAG_PREFERENCE_SELECT} ORDER BY p.id DESC`).all();
+  res.json({ ok: true, preferences: rows.map(toUserTagPreference) });
+});
+
+app.post("/api/admin/user-tag-preferences", requireAdmin, (req, res) => {
+  const { userId, tagId } = req.body || {};
+
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    return res.json({ ok: false, error: "Оберіть користувача" });
+  }
+  const numericTagId = Number(tagId);
+  if (!Number.isInteger(numericTagId)) {
+    return res.json({ ok: false, error: "Оберіть тег" });
+  }
+
+  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
+  if (!user) {
+    return res.json({ ok: false, error: "Користувача не знайдено" });
+  }
+  const tag = db.prepare("SELECT id FROM tags WHERE id = ?").get(numericTagId);
+  if (!tag) {
+    return res.json({ ok: false, error: "Тег не знайдено" });
+  }
+
+  const dup = db
+    .prepare("SELECT id FROM user_tag_preferences WHERE user_id = ? AND tag_id = ?")
+    .get(userId, numericTagId);
+  if (dup) {
+    return res.json({ ok: false, error: "У цього користувача вже є таке вподобання" });
+  }
+
+  const result = db
+    .prepare("INSERT INTO user_tag_preferences (user_id, tag_id, created_at) VALUES (?, ?, ?)")
+    .run(userId, numericTagId, Date.now());
+
+  const row = db.prepare(`${USER_TAG_PREFERENCE_SELECT} WHERE p.id = ?`).get(result.lastInsertRowid);
+  res.json({ ok: true, preference: toUserTagPreference(row) });
+});
+
+app.delete("/api/admin/user-tag-preferences/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id" });
+  }
+
+  const existing = db.prepare("SELECT id FROM user_tag_preferences WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Запис не знайдено" });
+  }
+
+  db.prepare("DELETE FROM user_tag_preferences WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
+
+app.put("/api/admin/user-tag-preferences/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id" });
+  }
+
+  const existing = db.prepare("SELECT * FROM user_tag_preferences WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Запис не знайдено" });
+  }
+
+  const { userId, tagId } = req.body || {};
+
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    return res.json({ ok: false, error: "Оберіть користувача" });
+  }
+  const numericTagId = Number(tagId);
+  if (!Number.isInteger(numericTagId)) {
+    return res.json({ ok: false, error: "Оберіть тег" });
+  }
+
+  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
+  if (!user) {
+    return res.json({ ok: false, error: "Користувача не знайдено" });
+  }
+  const tag = db.prepare("SELECT id FROM tags WHERE id = ?").get(numericTagId);
+  if (!tag) {
+    return res.json({ ok: false, error: "Тег не знайдено" });
+  }
+
+  const dup = db
+    .prepare("SELECT id FROM user_tag_preferences WHERE user_id = ? AND tag_id = ? AND id != ?")
+    .get(userId, numericTagId, id);
+  if (dup) {
+    return res.json({ ok: false, error: "У цього користувача вже є таке вподобання" });
+  }
+
+  db.prepare("UPDATE user_tag_preferences SET user_id = ?, tag_id = ? WHERE id = ?").run(userId, numericTagId, id);
+
+  const row = db.prepare(`${USER_TAG_PREFERENCE_SELECT} WHERE p.id = ?`).get(id);
+  res.json({ ok: true, preference: toUserTagPreference(row) });
+});
+
+// ---- "Мої вподобання" — покупець керує власними тегами сам, з меню
+// користувача (див. Мої вподобання в user-menu.ts). На відміну від
+// адмінських ручок вище, тут немає id окремого запису в тілі запиту —
+// лише tagId і прапорець "увімкнено/вимкнено", решту (чи є вже такий
+// рядок) сервер визначає сам по user_id із сесії.
+
+app.get("/api/me/tag-preferences", requireAuth, (req, res) => {
+  const rows = db
+    .prepare("SELECT tag_id FROM user_tag_preferences WHERE user_id = ?")
+    .all(req.currentUser.id);
+  res.json({ ok: true, tagIds: rows.map((r) => r.tag_id) });
+});
+
+app.post("/api/me/tag-preferences", requireAuth, (req, res) => {
+  const { tagId, enabled } = req.body || {};
+  const numericTagId = Number(tagId);
+  if (!Number.isInteger(numericTagId)) {
+    return res.json({ ok: false, error: "Некоректний тег" });
+  }
+
+  const tag = db.prepare("SELECT id FROM tags WHERE id = ?").get(numericTagId);
+  if (!tag) {
+    return res.json({ ok: false, error: "Тег не знайдено" });
+  }
+
+  const userId = req.currentUser.id;
+  const existing = db
+    .prepare("SELECT id FROM user_tag_preferences WHERE user_id = ? AND tag_id = ?")
+    .get(userId, numericTagId);
+
+  if (enabled) {
+    if (!existing) {
+      db.prepare("INSERT INTO user_tag_preferences (user_id, tag_id, created_at) VALUES (?, ?, ?)").run(
+        userId,
+        numericTagId,
+        Date.now()
+      );
+    }
+  } else if (existing) {
+    db.prepare("DELETE FROM user_tag_preferences WHERE id = ?").run(existing.id);
+  }
+
+  res.json({ ok: true });
+});
+
+// Легкий список користувачів — лише для селектора у формі вподобань
+// вище (id + імʼя для відображення), без чутливих полів на кшталт
+// password_hash.
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT id, full_name, email, role FROM users ORDER BY full_name ASC").all();
+  res.json({
+    ok: true,
+    users: rows.map((r) => ({ id: r.id, fullName: r.full_name, email: r.email, role: r.role })),
+  });
 });
 
 // ==============================
@@ -591,11 +945,12 @@ const ADMIN_TABLES = [
   "carts",
   "cart_items",
   "wishlists",
-  "ingredient_types",
   "ingredients",
   "product_recipes",
   "ingredient_movements",
-  "user_ingredient_preferences",
+  "tags",
+  "product_tags",
+  "user_tag_preferences",
 ];
 
 app.get("/api/admin/table-counts", requireAdmin, (req, res) => {

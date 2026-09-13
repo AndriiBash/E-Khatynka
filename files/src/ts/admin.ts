@@ -6,18 +6,29 @@ import {
   updateCategory,
   deleteCategory,
   uploadCategoryIcon,
+  uploadIcon,
+  getTags,
+  createTag,
+  updateTag,
+  deleteTag,
+  getUserTagPreferences,
+  createUserTagPreference,
+  updateUserTagPreference,
+  deleteUserTagPreference,
+  getAdminUsers,
   getTableCounts,
 } from "./storage.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
 import { userMenuHtml, setupUserMenu } from "./user-menu.js";
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
-import type { ApiCategory } from "./types.js";
+import type { ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser } from "./types.js";
 
 // ==============================
 // Адмін-панель. Головна — плитки з назвами таблиць БД (той самий
 // список, що на ER-діаграмі й у server.js/ADMIN_TABLES). З реальним
-// CRUD поки лише "Категорії" (звідти й бере дані сайдбар покупця в
-// catalog.ts) — решта таблиць відкривається заглушкою "У розробці".
+// CRUD поки "Категорії", "Теги" й "Вподобання користувачів" (звідти й
+// бере дані сайдбар покупця в catalog.ts) — решта таблиць відкривається
+// заглушкою "У розробці".
 //
 // Захист сторінки — лише на клієнті: не-адмін (чи взагалі не
 // залогинений) одразу відлітає на index.html. Сам /api/admin/*
@@ -30,7 +41,10 @@ interface TableDef {
   label: string;
 }
 
-// Той самий список і порядок, що в server.js (ADMIN_TABLES).
+// Той самий список і порядок, що в server.js (ADMIN_TABLES) — оновлено
+// під нову ER-діаграму: "Типи інгредієнтів" і старі "Вподобання
+// користувачів" (по ingredient_type_id) прибрані, замість них — теги
+// (tags/product_tags) і вподобання по tag_id.
 const TABLES: TableDef[] = [
   { key: "users", label: "Користувачі" },
   { key: "sessions", label: "Сесії" },
@@ -39,14 +53,15 @@ const TABLES: TableDef[] = [
   { key: "order_items", label: "Продукти замовлення" },
   { key: "products", label: "Продукти" },
   { key: "categories", label: "Категорії" },
+  { key: "tags", label: "Теги" },
+  { key: "product_tags", label: "Теги продуктів" },
   { key: "carts", label: "Кошики" },
   { key: "cart_items", label: "Предмети кошика" },
   { key: "wishlists", label: "Списки бажаного" },
-  { key: "ingredient_types", label: "Типи інгредієнтів" },
   { key: "ingredients", label: "Інгредієнти" },
   { key: "product_recipes", label: "Рецепти продуктів" },
   { key: "ingredient_movements", label: "Рух інгредієнтів" },
-  { key: "user_ingredient_preferences", label: "Вподобання користувачів" },
+  { key: "user_tag_preferences", label: "Вподобання користувачів" },
 ];
 
 // Теплі тони в стилі бренду (--color-accent), по колу — щоб плитки
@@ -73,6 +88,89 @@ function pluralizeRecords(n: number): string {
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ==============================
+// Реконсиляція рядків таблиці замість повного innerHTML — потрібна,
+// бо пошук/пагінація перерендерюють тіло таблиці на кожне натискання
+// клавіші, а повна пересборка HTML пересоздавала й усі <img> іконки,
+// тож вони щоразу на мить зникали й підвантажувались заново (видимий
+// "мигіт", навіть коли сам список іконок не змінився). Тут — рядки з
+// тим самим data-row-id переносяться (не пересоздаються), а клітинки
+// патчаться на місці лише якщо контент справді інший; іконку рядка
+// чіпаємо, тільки якщо її src реально змінився.
+// ==============================
+
+function reconcileTableRows(tbody: HTMLTableSectionElement, newRowsHtml: string): void {
+  const temp = document.createElement("tbody");
+  temp.innerHTML = newRowsHtml;
+  const newRows = Array.from(temp.children) as HTMLTableRowElement[];
+
+  const oldById = new Map<string, HTMLTableRowElement>();
+  Array.from(tbody.children).forEach((tr) => {
+    const id = (tr as HTMLElement).dataset.rowId;
+    if (id) oldById.set(id, tr as HTMLTableRowElement);
+  });
+
+  const usedIds = new Set<string>();
+
+  newRows.forEach((newRow, index) => {
+    const id = newRow.dataset.rowId;
+    const oldRow = id ? oldById.get(id) : undefined;
+    const refNode = tbody.children[index] ?? null;
+
+    if (oldRow) {
+      usedIds.add(id as string);
+      patchRowInPlace(oldRow, newRow);
+      if (oldRow !== refNode) tbody.insertBefore(oldRow, refNode);
+    } else {
+      tbody.insertBefore(newRow, refNode);
+    }
+  });
+
+  oldById.forEach((tr, id) => {
+    if (!usedIds.has(id)) tr.remove();
+  });
+}
+
+function iconCellUnchanged(oldCell: Element, newCell: Element): boolean {
+  const oldImg = oldCell.querySelector("img");
+  const newImg = newCell.querySelector("img");
+  if (oldImg && newImg) return oldImg.getAttribute("src") === newImg.getAttribute("src");
+  if (!oldImg && !newImg) return oldCell.innerHTML === newCell.innerHTML;
+  return false;
+}
+
+// Невеличка анімація появи панелі перегляду — і коли переходимо від
+// порожнього "Оберіть запис..." до першого заповненого перегляду, і
+// коли перемикаємось між записами. Клас скидається й додається
+// заново з forced reflow (void .offsetWidth), інакше повторне
+// додавання того самого класу вдруге поспіль анімацію не запустить.
+function animatePreviewPanelIn(panel: HTMLElement): void {
+  panel.classList.remove("admin-preview--enter");
+  void panel.offsetWidth;
+  panel.classList.add("admin-preview--enter");
+}
+
+function patchRowInPlace(oldRow: HTMLTableRowElement, newRow: HTMLTableRowElement): void {
+  if (oldRow.className !== newRow.className) oldRow.className = newRow.className;
+
+  const oldCells = Array.from(oldRow.children);
+  const newCells = Array.from(newRow.children);
+
+  newCells.forEach((newCell, i) => {
+    const oldCell = oldCells[i];
+    if (!oldCell) return;
+
+    const isIconCell = newCell.classList.contains("admin-table__icon-cell");
+    if (isIconCell) {
+      if (!iconCellUnchanged(oldCell, newCell)) oldCell.innerHTML = newCell.innerHTML;
+      return;
+    }
+
+    if (oldCell.innerHTML !== newCell.innerHTML) oldCell.innerHTML = newCell.innerHTML;
+    if (oldCell.className !== newCell.className) oldCell.className = newCell.className;
+  });
 }
 
 // ==============================
@@ -284,13 +382,18 @@ function setupCategoryModalIconPicker(): void {
   });
 }
 
-const EDIT_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M15.5 4.5L19.5 8.5M3 21L3.6 17.8C3.7 17.2 4 16.6 4.4 16.2L15 5.6C15.8 4.8 17.1 4.8 17.9 5.6L18.4 6.1C19.2 6.9 19.2 8.2 18.4 9L7.8 19.6C7.4 20 6.8 20.3 6.2 20.4L3 21Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const DELETE_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7H20M9 7V4.5C9 4 9.4 3.5 10 3.5H14C14.6 3.5 15 4 15 4.5V7M6 7L6.8 19C6.9 19.7 7.5 20.2 8.2 20.2H15.8C16.5 20.2 17.1 19.7 17.2 19L18 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const PREVIEW_ICON_SVG = `<svg class="admin-table__action-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 12C2 12 5.5 5 12 5C18.5 5 22 12 22 12C22 12 18.5 19 12 19C5.5 19 2 12 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>`;
+// Іконки дій (перегляд/редагування/видалення) — винесені в окремі
+// SVG-файли assets/icons/admin-*.svg замість inline-розмітки тут, за
+// тим самим принципом, що й іконки бічного меню (mask-image, щоб колір
+// лишався керованим через CSS currentColor/background-color кожної
+// кнопки — превʼю/редагування/видалення пофарбовані по-різному).
+function actionIconHtml(variant: "preview" | "edit" | "delete"): string {
+  return `<span class="admin-table__action-icon admin-table__action-icon--${variant}" aria-hidden="true"></span>`;
+}
 
 function categoryRowHtml(c: ApiCategory): string {
   const icon = c.iconUrl
-    ? `<img class="admin-table__icon" src="${c.iconUrl}" alt="" aria-hidden="true" onerror="this.remove()" />`
+    ? `<img class="admin-table__icon skeleton" src="${c.iconUrl}" alt="" aria-hidden="true" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
     : `<span class="admin-table__icon admin-table__icon--placeholder" aria-hidden="true"></span>`;
   const description = c.description ? escapeHtml(c.description) : "—";
 
@@ -301,15 +404,17 @@ function categoryRowHtml(c: ApiCategory): string {
       <td class="admin-table__name-cell" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
       <td class="admin-table__description-cell" title="${c.description ? escapeHtml(c.description) : ""}">${description}</td>
       <td class="admin-table__actions-cell">
-        <button class="admin-table__preview-btn" data-preview="${c.id}" type="button" aria-label="Переглянути">
-          ${PREVIEW_ICON_SVG}<span class="admin-table__action-label">Переглянути</span>
-        </button>
-        <button class="admin-table__edit-btn" data-edit="${c.id}" type="button" aria-label="Редагувати">
-          ${EDIT_ICON_SVG}<span class="admin-table__action-label">Редагувати</span>
-        </button>
-        <button class="admin-table__delete-btn" data-delete="${c.id}" type="button" aria-label="Видалити">
-          ${DELETE_ICON_SVG}<span class="admin-table__action-label">Видалити</span>
-        </button>
+        <div class="admin-table__actions">
+          <button class="admin-table__preview-btn" data-preview="${c.id}" type="button" aria-label="Переглянути">
+            ${actionIconHtml("preview")}<span class="admin-table__action-label">Переглянути</span>
+          </button>
+          <button class="admin-table__edit-btn" data-edit="${c.id}" type="button" aria-label="Редагувати">
+            ${actionIconHtml("edit")}<span class="admin-table__action-label">Редагувати</span>
+          </button>
+          <button class="admin-table__delete-btn" data-delete="${c.id}" type="button" aria-label="Видалити">
+            ${actionIconHtml("delete")}<span class="admin-table__action-label">Видалити</span>
+          </button>
+        </div>
       </td>
     </tr>`;
 }
@@ -330,12 +435,28 @@ function categorySkeletonRowHtml(): string {
     </tr>`;
 }
 
+// Спільний <colgroup> для обох рендерів таблиці (скелетон і реальні
+// дані) — саме він, а не контент кожного окремого рядка, тепер визначає
+// ширину колонок (table-layout: fixed нижче). Без цього auto-layout
+// перераховував ширину колонок під контент КОЖНОГО рядка окремо, і
+// межі сусідніх клітинок могли на піксель "гуляти" від рядка до рядка —
+// це і була причина не зовсім рівних країв між рядками.
+const CATEGORY_TABLE_COLGROUP = `
+  <colgroup>
+    <col style="width:48px" />
+    <col style="width:44px" />
+    <col style="width:130px" />
+    <col />
+    <col style="width:150px" />
+  </colgroup>`;
+
 function renderCategoriesTableSkeleton(): void {
   const wrap = document.getElementById("admin-categories-table-wrap");
   if (!wrap) return;
 
   wrap.innerHTML = `
     <table class="admin-table">
+      ${CATEGORY_TABLE_COLGROUP}
       <thead>
         <tr>
           <th>ID</th>
@@ -345,7 +466,7 @@ function renderCategoriesTableSkeleton(): void {
           <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody data-skeleton="true">
         ${Array.from({ length: CATEGORY_SKELETON_ROWS }, categorySkeletonRowHtml).join("")}
       </tbody>
     </table>`;
@@ -435,7 +556,7 @@ function renderCategoryPreviewPanel(): void {
   }
 
   const icon = category.iconUrl
-    ? `<img class="admin-preview__icon" src="${category.iconUrl}" alt="" onerror="this.remove()" />`
+    ? `<img class="admin-preview__icon skeleton" src="${category.iconUrl}" alt="" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
     : `<span class="admin-preview__icon admin-preview__icon--placeholder"></span>`;
 
   panel.innerHTML = `
@@ -452,6 +573,7 @@ function renderCategoryPreviewPanel(): void {
       <button class="btn btn--ghost" id="admin-preview-edit-btn" type="button">Редагувати</button>
       <button class="btn btn--danger" id="admin-preview-delete-btn" type="button">Видалити</button>
     </div>`;
+  animatePreviewPanelIn(panel);
 
   document.getElementById("admin-preview-edit-btn")?.addEventListener("click", () => {
     openCategoryModal({ type: "edit", id: category.id });
@@ -459,7 +581,10 @@ function renderCategoryPreviewPanel(): void {
 
   document.getElementById("admin-preview-delete-btn")?.addEventListener("click", () => {
     void (async () => {
-      const confirmed = await confirmDelete(category.name);
+      const confirmed = await confirmDelete(
+        "Видалити категорію?",
+        `Категорію «${category.name}» буде видалено безповоротно.`
+      );
       if (!confirmed) return;
       const result = await deleteCategory(category.id);
       if (!result.ok) {
@@ -503,72 +628,74 @@ function renderCategoriesTableBody(): void {
   }
 
   const pageItems = filtered.slice((categoryPage - 1) * CATEGORY_PAGE_SIZE, categoryPage * CATEGORY_PAGE_SIZE);
+  const rowsHtml = pageItems.map(categoryRowHtml).join("");
 
-  wrap.innerHTML = `
-    <table class="admin-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th></th>
-          <th>Назва</th>
-          <th>Опис</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${pageItems.map(categoryRowHtml).join("")}
-      </tbody>
-    </table>`;
+  const existingTbody = wrap.querySelector<HTMLTableSectionElement>("tbody:not([data-skeleton])");
+  if (existingTbody) {
+    reconcileTableRows(existingTbody, rowsHtml);
+  } else {
+    wrap.innerHTML = `
+      <table class="admin-table">
+        ${CATEGORY_TABLE_COLGROUP}
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th></th>
+            <th>Назва</th>
+            <th>Опис</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  renderCategoryPagination(filtered.length);
+}
+
+// Один делегований обробник кліків на весь контейнер замість
+// addEventListener на кожній кнопці при кожному рендері тіла таблиці:
+// оскільки рядки тепер переносяться (не пересоздаються) між
+// рендерами, розвішувати нові слухачі щоразу на ті самі DOM-вузли
+// означало б дублювати їх — один клік викликав би обробник кілька
+// разів. Викликається один раз при відкритті сторінки "Категорії".
+function setupCategoryTableEvents(): void {
+  const wrap = document.getElementById("admin-categories-table-wrap");
+  if (!wrap) return;
 
   const openPreview = (id: number): void => {
     previewCategoryId = id;
-    // Не перегенеровуємо всю таблицю заради єдиного класу
-    // "активний рядок" — innerHTML наново пересоздавав усі <img>
-    // іконки в таблиці, тож вони на мить зникали й підвантажувались
-    // заново (той самий баг було видно й тут, і при відкритті
-    // перегляду категорії). Просто перемикаємо клас на рядках.
     highlightActiveTableRow();
     renderCategoryPreviewPanel();
   };
 
-  wrap.querySelectorAll<HTMLButtonElement>("[data-preview]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      openPreview(Number(btn.dataset.preview));
-    });
-  });
+  wrap.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
 
-  // Клік по всьому рядку відкриває перегляд — лише на пристроях із
-  // мишею (той самий "hover: hover and pointer: fine", яким тут скрізь
-  // визначають "десктоп"): на тач-екрані рядок і так вузький, і
-  // випадковий тап між кнопками дій відкривав би перегляд замість
-  // очікуваної дії (чи взагалі нічого).
-  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-    wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
-      tr.addEventListener("click", (e) => {
-        // Кнопки дій всередині рядка мають власні обробники — не
-        // перехоплюємо їхні кліки (інакше "Видалити" ще й відкривав би
-        // перегляд тієї категорії, яку щойно видалив).
-        if ((e.target as HTMLElement).closest("button")) return;
-        openPreview(Number(tr.dataset.rowId));
-      });
-    });
-  }
+    const previewBtn = target.closest<HTMLButtonElement>("[data-preview]");
+    if (previewBtn) {
+      openPreview(Number(previewBtn.dataset.preview));
+      return;
+    }
 
-  wrap.querySelectorAll<HTMLButtonElement>("[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.dataset.edit);
+    const editBtn = target.closest<HTMLButtonElement>("[data-edit]");
+    if (editBtn) {
+      const id = Number(editBtn.dataset.edit);
       if (allCategories.some((c) => c.id === id)) openCategoryModal({ type: "edit", id });
-    });
-  });
+      return;
+    }
 
-  wrap.querySelectorAll<HTMLButtonElement>("[data-delete]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.dataset.delete);
+    const deleteBtn = target.closest<HTMLButtonElement>("[data-delete]");
+    if (deleteBtn) {
+      const id = Number(deleteBtn.dataset.delete);
       const category = allCategories.find((c) => c.id === id);
       if (!category) return;
 
       void (async () => {
-        const confirmed = await confirmDelete(category.name);
+        const confirmed = await confirmDelete(
+          "Видалити категорію?",
+          `Категорію «${category.name}» буде видалено безповоротно.`
+        );
         if (!confirmed) return;
         const result = await deleteCategory(id);
         if (!result.ok) {
@@ -581,10 +708,19 @@ function renderCategoriesTableBody(): void {
         if (previewCategoryId === id) previewCategoryId = null;
         await loadAndRenderCategories();
       })();
-    });
-  });
+      return;
+    }
 
-  renderCategoryPagination(filtered.length);
+    // Клік по всьому рядку відкриває перегляд — лише на пристроях із
+    // мишею (той самий "hover: hover and pointer: fine", яким тут скрізь
+    // визначають "десктоп"): на тач-екрані рядок і так вузький, і
+    // випадковий тап між кнопками дій відкривав би перегляд замість
+    // очікуваної дії (чи взагалі нічого).
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      const row = target.closest<HTMLTableRowElement>("tr[data-row-id]");
+      if (row) openPreview(Number(row.dataset.rowId));
+    }
+  });
 }
 
 async function loadAndRenderCategories(): Promise<void> {
@@ -758,14 +894,14 @@ function renderCategoriesTable(): void {
 
   root.innerHTML = `
     <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
-    <div class="admin-table-header">
-      <h1 class="admin-page__title">Категорії</h1>
-      <button class="btn btn--primary-sm admin-add-btn" id="admin-add-category-btn" type="button">+ Додати категорію</button>
-    </div>
+    <h1 class="admin-page__title">Категорії</h1>
 
     <div class="admin-categories-layout">
       <section class="admin-section admin-section--wide">
-        <p class="admin-section__hint">Категорії, які ви тут додаєте, одразу зʼявляються у боковому меню каталогу для покупця.</p>
+        <div class="admin-section__header">
+          <p class="admin-section__hint">Категорії, які ви тут додаєте, одразу зʼявляються у боковому меню каталогу для покупця.</p>
+          <button class="btn btn--primary-sm admin-add-btn" id="admin-add-category-btn" type="button">+ Додати категорію</button>
+        </div>
 
         <div class="admin-table-toolbar">
           <div class="admin-search-wrap">
@@ -776,7 +912,7 @@ function renderCategoriesTable(): void {
           </div>
         </div>
 
-        <div id="admin-categories-table-wrap"></div>
+        <div id="admin-categories-table-wrap" class="admin-table-wrap"></div>
         <div id="admin-categories-pagination" class="admin-pagination"></div>
       </section>
 
@@ -791,8 +927,1048 @@ function renderCategoriesTable(): void {
   });
 
   setupCategorySearch();
+  setupCategoryTableEvents();
   renderCategoriesTableSkeleton();
   void loadAndRenderCategories();
+}
+
+// ==============================
+// Теги — той самий CRUD-патерн, що й категорії, лише без опису (за
+// ER-діаграмою в тегів тільки name + icon_url).
+// ==============================
+
+let allTags: ApiTag[] = [];
+let tagSearchQuery = "";
+let tagPage = 1;
+let previewTagId: number | null = null;
+const TAG_PAGE_SIZE = 8;
+
+let tagModalIconUrl: string | null = null;
+type TagModalMode = { type: "create" } | { type: "edit"; id: number };
+let tagModalMode: TagModalMode = { type: "create" };
+
+function renderTagModalIconPreview(): void {
+  const previewSlot = document.getElementById("admin-tag-icon-preview");
+  const clearBtn = document.getElementById("admin-tag-icon-clear") as HTMLButtonElement | null;
+  if (previewSlot) previewSlot.innerHTML = categoryIconPreviewHtml(tagModalIconUrl);
+  if (clearBtn) clearBtn.hidden = !tagModalIconUrl;
+}
+
+function setupTagModalIconPicker(): void {
+  const fileInput = document.getElementById("admin-tag-icon-file") as HTMLInputElement | null;
+  const status = document.getElementById("admin-tag-icon-status");
+  const clearBtn = document.getElementById("admin-tag-icon-clear");
+  if (!fileInput) return;
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    if (status) status.textContent = "Завантаження…";
+
+    void (async () => {
+      const result = await uploadIcon(file, "tags");
+      fileInput.value = "";
+
+      if (!result.ok) {
+        if (status) status.textContent = result.error;
+        return;
+      }
+
+      if (status) status.textContent = "";
+      tagModalIconUrl = result.url;
+      renderTagModalIconPreview();
+    })();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    tagModalIconUrl = null;
+    if (status) status.textContent = "";
+    renderTagModalIconPreview();
+  });
+}
+
+function tagRowHtml(t: ApiTag): string {
+  const icon = t.iconUrl
+    ? `<img class="admin-table__icon skeleton" src="${t.iconUrl}" alt="" aria-hidden="true" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
+    : `<span class="admin-table__icon admin-table__icon--placeholder" aria-hidden="true"></span>`;
+
+  return `
+    <tr class="${t.id === previewTagId ? "admin-table__row--active" : ""}" data-row-id="${t.id}">
+      <td class="admin-table__id-cell">${t.id}</td>
+      <td class="admin-table__icon-cell">${icon}</td>
+      <td class="admin-table__name-cell" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</td>
+      <td class="admin-table__actions-cell">
+        <div class="admin-table__actions">
+          <button class="admin-table__preview-btn" data-preview="${t.id}" type="button" aria-label="Переглянути">
+            ${actionIconHtml("preview")}<span class="admin-table__action-label">Переглянути</span>
+          </button>
+          <button class="admin-table__edit-btn" data-edit="${t.id}" type="button" aria-label="Редагувати">
+            ${actionIconHtml("edit")}<span class="admin-table__action-label">Редагувати</span>
+          </button>
+          <button class="admin-table__delete-btn" data-delete="${t.id}" type="button" aria-label="Видалити">
+            ${actionIconHtml("delete")}<span class="admin-table__action-label">Видалити</span>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function tagSkeletonRowHtml(): string {
+  return `
+    <tr>
+      <td class="admin-table__id-cell"><span class="admin-table__skeleton-id skeleton"></span></td>
+      <td class="admin-table__icon-cell"><span class="admin-table__skeleton-icon skeleton"></span></td>
+      <td><span class="admin-table__skeleton-name skeleton"></span></td>
+      <td></td>
+    </tr>`;
+}
+
+// Колонок на одну менше, ніж у категорій (нема "Опис") — актуальний
+// набір ширин під ту саму ідею з table-layout: fixed (див. коментар
+// біля CATEGORY_TABLE_COLGROUP): однакові межі колонок у кожному рядку.
+const TAG_TABLE_COLGROUP = `
+  <colgroup>
+    <col style="width:48px" />
+    <col style="width:44px" />
+    <col />
+    <col style="width:150px" />
+  </colgroup>`;
+
+function renderTagsTableSkeleton(): void {
+  const wrap = document.getElementById("admin-tags-table-wrap");
+  if (!wrap) return;
+
+  wrap.innerHTML = `
+    <table class="admin-table">
+      ${TAG_TABLE_COLGROUP}
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th></th>
+          <th>Назва</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody data-skeleton="true">
+        ${Array.from({ length: CATEGORY_SKELETON_ROWS }, tagSkeletonRowHtml).join("")}
+      </tbody>
+    </table>`;
+}
+
+const EMPTY_TAGS_HTML = `
+  <div class="admin-categories-empty">Тегів ще немає.<br />Додайте перший кнопкою вище.</div>`;
+
+function filteredTags(): ApiTag[] {
+  const q = tagSearchQuery.trim().toLowerCase();
+  if (!q) return allTags;
+  return allTags.filter((t) => t.name.toLowerCase().includes(q));
+}
+
+function renderTagPagination(filteredCount: number): void {
+  const el = document.getElementById("admin-tags-pagination");
+  if (!el) return;
+
+  if (filteredCount === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / TAG_PAGE_SIZE));
+  const start = (tagPage - 1) * TAG_PAGE_SIZE + 1;
+  const end = Math.min(tagPage * TAG_PAGE_SIZE, filteredCount);
+  const summary = `<p class="admin-pagination__summary">Показано ${start}–${end} з ${pluralizeRecords(filteredCount)}</p>`;
+
+  if (totalPages <= 1) {
+    el.innerHTML = summary;
+    return;
+  }
+
+  let pageButtons = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pageButtons += `<button class="admin-pagination__page${
+      p === tagPage ? " admin-pagination__page--active" : ""
+    }" data-page="${p}" type="button">${p}</button>`;
+  }
+
+  el.innerHTML = `
+    ${summary}
+    <div class="admin-pagination__controls">
+      <button class="admin-pagination__arrow" id="admin-tag-page-prev" type="button" aria-label="Попередня сторінка" ${
+        tagPage === 1 ? "disabled" : ""
+      }>‹</button>
+      ${pageButtons}
+      <button class="admin-pagination__arrow" id="admin-tag-page-next" type="button" aria-label="Наступна сторінка" ${
+        tagPage === totalPages ? "disabled" : ""
+      }>›</button>
+    </div>`;
+
+  document.getElementById("admin-tag-page-prev")?.addEventListener("click", () => {
+    if (tagPage > 1) {
+      tagPage--;
+      renderTagsTableBody();
+    }
+  });
+  document.getElementById("admin-tag-page-next")?.addEventListener("click", () => {
+    if (tagPage < totalPages) {
+      tagPage++;
+      renderTagsTableBody();
+    }
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tagPage = Number(btn.dataset.page);
+      renderTagsTableBody();
+    });
+  });
+}
+
+function renderTagPreviewPanel(): void {
+  const panel = document.getElementById("admin-tag-preview");
+  if (!panel) return;
+
+  const tag = allTags.find((t) => t.id === previewTagId);
+
+  if (!tag) {
+    panel.innerHTML = `<div class="admin-preview-empty">Оберіть тег зі списку, щоб переглянути&nbsp;деталі.</div>`;
+    return;
+  }
+
+  const icon = tag.iconUrl
+    ? `<img class="admin-preview__icon skeleton" src="${tag.iconUrl}" alt="" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
+    : `<span class="admin-preview__icon admin-preview__icon--placeholder"></span>`;
+
+  panel.innerHTML = `
+    <div class="admin-preview__header">
+      <h2 class="admin-preview__name">${escapeHtml(tag.name)}</h2>
+      <span class="admin-preview__id">ID: ${tag.id}</span>
+    </div>
+    ${icon}
+    <div class="admin-preview__actions">
+      <button class="btn btn--ghost" id="admin-tag-preview-edit-btn" type="button">Редагувати</button>
+      <button class="btn btn--danger" id="admin-tag-preview-delete-btn" type="button">Видалити</button>
+    </div>`;
+  animatePreviewPanelIn(panel);
+
+  document.getElementById("admin-tag-preview-edit-btn")?.addEventListener("click", () => {
+    openTagModal({ type: "edit", id: tag.id });
+  });
+
+  document.getElementById("admin-tag-preview-delete-btn")?.addEventListener("click", () => {
+    void (async () => {
+      const confirmed = await confirmDelete("Видалити тег?", `Тег «${tag.name}» буде видалено безповоротно.`);
+      if (!confirmed) return;
+      const result = await deleteTag(tag.id);
+      if (!result.ok) {
+        window.alert(result.error);
+        return;
+      }
+      previewTagId = null;
+      await loadAndRenderTags();
+    })();
+  });
+}
+
+function highlightActiveTagRow(): void {
+  const wrap = document.getElementById("admin-tags-table-wrap");
+  if (!wrap) return;
+  wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.classList.toggle("admin-table__row--active", Number(tr.dataset.rowId) === previewTagId);
+  });
+}
+
+function renderTagsTableBody(): void {
+  const wrap = document.getElementById("admin-tags-table-wrap");
+  if (!wrap) return;
+
+  if (!allTags.length) {
+    wrap.innerHTML = EMPTY_TAGS_HTML;
+    renderTagPagination(0);
+    return;
+  }
+
+  const filtered = filteredTags();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / TAG_PAGE_SIZE));
+  if (tagPage > totalPages) tagPage = totalPages;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="admin-categories-empty">Нічого не знайдено за запитом «${escapeHtml(
+      tagSearchQuery
+    )}».</div>`;
+    renderTagPagination(0);
+    return;
+  }
+
+  const pageItems = filtered.slice((tagPage - 1) * TAG_PAGE_SIZE, tagPage * TAG_PAGE_SIZE);
+  const rowsHtml = pageItems.map(tagRowHtml).join("");
+
+  const existingTbody = wrap.querySelector<HTMLTableSectionElement>("tbody:not([data-skeleton])");
+  if (existingTbody) {
+    reconcileTableRows(existingTbody, rowsHtml);
+  } else {
+    wrap.innerHTML = `
+      <table class="admin-table">
+        ${TAG_TABLE_COLGROUP}
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th></th>
+            <th>Назва</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  renderTagPagination(filtered.length);
+}
+
+function setupTagTableEvents(): void {
+  const wrap = document.getElementById("admin-tags-table-wrap");
+  if (!wrap) return;
+
+  const openPreview = (id: number): void => {
+    previewTagId = id;
+    highlightActiveTagRow();
+    renderTagPreviewPanel();
+  };
+
+  wrap.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const previewBtn = target.closest<HTMLButtonElement>("[data-preview]");
+    if (previewBtn) {
+      openPreview(Number(previewBtn.dataset.preview));
+      return;
+    }
+
+    const editBtn = target.closest<HTMLButtonElement>("[data-edit]");
+    if (editBtn) {
+      const id = Number(editBtn.dataset.edit);
+      if (allTags.some((t) => t.id === id)) openTagModal({ type: "edit", id });
+      return;
+    }
+
+    const deleteBtn = target.closest<HTMLButtonElement>("[data-delete]");
+    if (deleteBtn) {
+      const id = Number(deleteBtn.dataset.delete);
+      const tag = allTags.find((t) => t.id === id);
+      if (!tag) return;
+
+      void (async () => {
+        const confirmed = await confirmDelete("Видалити тег?", `Тег «${tag.name}» буде видалено безповоротно.`);
+        if (!confirmed) return;
+        const result = await deleteTag(id);
+        if (!result.ok) {
+          window.alert(result.error);
+          return;
+        }
+        if (previewTagId === id) previewTagId = null;
+        await loadAndRenderTags();
+      })();
+      return;
+    }
+
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      const row = target.closest<HTMLTableRowElement>("tr[data-row-id]");
+      if (row) openPreview(Number(row.dataset.rowId));
+    }
+  });
+}
+
+async function loadAndRenderTags(): Promise<void> {
+  allTags = await getTags();
+  if (previewTagId !== null && !allTags.some((t) => t.id === previewTagId)) {
+    previewTagId = null;
+  }
+  renderTagsTableBody();
+  renderTagPreviewPanel();
+}
+
+function setupTagSearch(): void {
+  const input = document.getElementById("admin-tag-search") as HTMLInputElement | null;
+  const clearBtn = document.getElementById("admin-tag-search-clear") as HTMLButtonElement | null;
+  if (!input) return;
+
+  const syncClearBtn = (): void => {
+    clearBtn?.classList.toggle("admin-search-clear--visible", input.value.length > 0);
+  };
+
+  input.addEventListener("input", () => {
+    tagSearchQuery = input.value;
+    tagPage = 1;
+    syncClearBtn();
+    renderTagsTableBody();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    tagSearchQuery = "";
+    tagPage = 1;
+    syncClearBtn();
+    renderTagsTableBody();
+    input.focus();
+  });
+
+  syncClearBtn();
+}
+
+// ---- Модалка додавання/редагування тегу ----
+
+function onTagModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeTagModal();
+}
+
+function openTagModal(mode: TagModalMode): void {
+  const modal = document.getElementById("admin-tag-modal");
+  const title = document.getElementById("admin-tag-modal-title");
+  const submitBtn = document.getElementById("admin-tag-modal-submit");
+  const nameInput = document.getElementById("admin-tag-name") as HTMLInputElement | null;
+  const nameError = document.getElementById("admin-tag-name-error");
+  const message = document.getElementById("admin-tag-message");
+  if (!modal || !nameInput) return;
+
+  tagModalMode = mode;
+
+  if (nameError) nameError.textContent = "";
+  nameInput.classList.remove("input--invalid");
+  if (message) {
+    message.textContent = "";
+    message.classList.remove("form-message--visible", "form-message--error");
+  }
+
+  if (mode.type === "edit") {
+    const tag = allTags.find((t) => t.id === mode.id);
+    if (!tag) return;
+    if (title) title.textContent = "Редагувати тег";
+    if (submitBtn) submitBtn.textContent = "Зберегти";
+    nameInput.value = tag.name;
+    tagModalIconUrl = tag.iconUrl;
+  } else {
+    if (title) title.textContent = "Додати тег";
+    if (submitBtn) submitBtn.textContent = "Додати тег";
+    nameInput.value = "";
+    tagModalIconUrl = null;
+  }
+
+  renderTagModalIconPreview();
+
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onTagModalKeydown);
+  nameInput.focus();
+}
+
+function closeTagModal(): void {
+  const modal = document.getElementById("admin-tag-modal");
+  if (!modal) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onTagModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function setupTagModal(): void {
+  const modal = document.getElementById("admin-tag-modal");
+  const closeBtn = document.getElementById("admin-tag-modal-close");
+  const backdrop = modal?.querySelector(".auth-modal__backdrop");
+  closeBtn?.addEventListener("click", closeTagModal);
+  backdrop?.addEventListener("click", closeTagModal);
+
+  setupTagModalIconPicker();
+
+  const form = document.getElementById("admin-tag-form") as HTMLFormElement | null;
+  const message = document.getElementById("admin-tag-message");
+  const nameInput = document.getElementById("admin-tag-name") as HTMLInputElement | null;
+  const nameError = document.getElementById("admin-tag-name-error");
+  if (!form || !nameInput) return;
+
+  const showMessage = (text: string, isError: boolean): void => {
+    if (!message) return;
+    message.textContent = text;
+    message.classList.add("form-message--visible");
+    message.classList.toggle("form-message--error", isError);
+  };
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const name = nameInput.value.trim();
+    if (nameError) nameError.textContent = "";
+    nameInput.classList.remove("input--invalid");
+
+    if (name.length < 2) {
+      if (nameError) nameError.textContent = "Введіть назву тегу (мінімум 2 символи)";
+      nameInput.classList.add("input--invalid");
+      return;
+    }
+
+    const input = { name, iconUrl: tagModalIconUrl ?? "" };
+
+    void (async () => {
+      const result = tagModalMode.type === "edit" ? await updateTag(tagModalMode.id, input) : await createTag(input);
+
+      if (!result.ok) {
+        showMessage(result.error, true);
+        return;
+      }
+
+      closeTagModal();
+      await loadAndRenderTags();
+    })();
+  });
+}
+
+function renderTagsTable(): void {
+  const root = document.getElementById("admin-view");
+  if (!root) return;
+
+  tagSearchQuery = "";
+  tagPage = 1;
+  previewTagId = null;
+
+  root.innerHTML = `
+    <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
+    <h1 class="admin-page__title">Теги</h1>
+
+    <div class="admin-categories-layout">
+      <section class="admin-section admin-section--wide">
+        <div class="admin-section__header">
+          <p class="admin-section__hint">Теги можна прикріпити до продуктів (розділ "Теги продуктів") і показати покупцю як позначки на картці.</p>
+          <button class="btn btn--primary-sm admin-add-btn" id="admin-add-tag-btn" type="button">+ Додати тег</button>
+        </div>
+
+        <div class="admin-table-toolbar">
+          <div class="admin-search-wrap">
+            <input type="text" id="admin-tag-search" class="admin-table-search" placeholder="Пошук тегів за назвою…" autocomplete="off" />
+            <button class="admin-search-clear" id="admin-tag-search-clear" type="button" aria-label="Очистити пошук">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-tags-table-wrap" class="admin-table-wrap"></div>
+        <div id="admin-tags-pagination" class="admin-pagination"></div>
+      </section>
+
+      <section class="admin-section admin-preview" id="admin-tag-preview"></section>
+    </div>`;
+
+  document.getElementById("admin-back-btn")?.addEventListener("click", () => {
+    window.location.hash = "";
+  });
+  document.getElementById("admin-add-tag-btn")?.addEventListener("click", () => {
+    openTagModal({ type: "create" });
+  });
+
+  setupTagSearch();
+  setupTagTableEvents();
+  renderTagsTableSkeleton();
+  void loadAndRenderTags();
+}
+
+// ==============================
+// Вподобання користувачів (user_tag_preferences) — простіший список:
+// без окремої панелі перегляду (уся інформація вже в самому рядку),
+// додавання — вибором користувача й тегу з випадних списків.
+// ==============================
+
+let allPreferences: ApiUserTagPreference[] = [];
+let prefSearchQuery = "";
+let prefPage = 1;
+let previewPrefId: number | null = null;
+const PREF_PAGE_SIZE = 8;
+
+type PrefModalMode = { type: "create" } | { type: "edit"; id: number };
+let prefModalMode: PrefModalMode = { type: "create" };
+
+function formatDateTime(ms: number): string {
+  return new Date(ms).toLocaleString("uk-UA", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function filteredPreferences(): ApiUserTagPreference[] {
+  const q = prefSearchQuery.trim().toLowerCase();
+  if (!q) return allPreferences;
+  return allPreferences.filter(
+    (p) => p.userFullName.toLowerCase().includes(q) || p.tagName.toLowerCase().includes(q)
+  );
+}
+
+function prefRowHtml(p: ApiUserTagPreference): string {
+  const icon = p.tagIconUrl
+    ? `<img class="admin-table__icon skeleton" src="${p.tagIconUrl}" alt="" aria-hidden="true" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
+    : `<span class="admin-table__icon admin-table__icon--placeholder" aria-hidden="true"></span>`;
+
+  return `
+    <tr class="${p.id === previewPrefId ? "admin-table__row--active" : ""}" data-row-id="${p.id}">
+      <td class="admin-table__id-cell">${p.id}</td>
+      <td class="admin-table__user-cell" title="${escapeHtml(p.userFullName)}">
+        <span class="admin-table__user-name">${escapeHtml(p.userFullName)}</span>
+        <span class="admin-table__subtext">${escapeHtml(p.userEmail)}</span>
+      </td>
+      <td class="admin-table__icon-cell">${icon}</td>
+      <td class="admin-table__name-cell" title="${escapeHtml(p.tagName)}">${escapeHtml(p.tagName)}</td>
+      <td class="admin-table__description-cell">${formatDateTime(p.createdAt)}</td>
+      <td class="admin-table__actions-cell">
+        <div class="admin-table__actions">
+          <button class="admin-table__preview-btn" data-preview="${p.id}" type="button" aria-label="Переглянути">
+            ${actionIconHtml("preview")}<span class="admin-table__action-label">Переглянути</span>
+          </button>
+          <button class="admin-table__edit-btn" data-edit="${p.id}" type="button" aria-label="Редагувати">
+            ${actionIconHtml("edit")}<span class="admin-table__action-label">Редагувати</span>
+          </button>
+          <button class="admin-table__delete-btn" data-delete="${p.id}" type="button" aria-label="Видалити">
+            ${actionIconHtml("delete")}<span class="admin-table__action-label">Видалити</span>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+// Останню колонку розширено під 3 кнопки (перегляд/редагування/
+// видалення) замість однієї "видалити" — так само, як у категорій/тегів.
+const PREF_TABLE_COLGROUP = `
+  <colgroup>
+    <col style="width:48px" />
+    <col style="width:170px" />
+    <col style="width:44px" />
+    <col style="width:110px" />
+    <col />
+    <col style="width:150px" />
+  </colgroup>`;
+
+const EMPTY_PREFS_HTML = `
+  <div class="admin-categories-empty">Вподобань ще немає.<br />Додайте перше кнопкою вище.</div>`;
+
+
+function renderPrefPagination(filteredCount: number): void {
+  const el = document.getElementById("admin-prefs-pagination");
+  if (!el) return;
+
+  if (filteredCount === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / PREF_PAGE_SIZE));
+  const start = (prefPage - 1) * PREF_PAGE_SIZE + 1;
+  const end = Math.min(prefPage * PREF_PAGE_SIZE, filteredCount);
+  const summary = `<p class="admin-pagination__summary">Показано ${start}–${end} з ${pluralizeRecords(filteredCount)}</p>`;
+
+  if (totalPages <= 1) {
+    el.innerHTML = summary;
+    return;
+  }
+
+  let pageButtons = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pageButtons += `<button class="admin-pagination__page${
+      p === prefPage ? " admin-pagination__page--active" : ""
+    }" data-page="${p}" type="button">${p}</button>`;
+  }
+
+  el.innerHTML = `
+    ${summary}
+    <div class="admin-pagination__controls">
+      <button class="admin-pagination__arrow" id="admin-pref-page-prev" type="button" aria-label="Попередня сторінка" ${
+        prefPage === 1 ? "disabled" : ""
+      }>‹</button>
+      ${pageButtons}
+      <button class="admin-pagination__arrow" id="admin-pref-page-next" type="button" aria-label="Наступна сторінка" ${
+        prefPage === totalPages ? "disabled" : ""
+      }>›</button>
+    </div>`;
+
+  document.getElementById("admin-pref-page-prev")?.addEventListener("click", () => {
+    if (prefPage > 1) {
+      prefPage--;
+      renderPrefsTableBody();
+    }
+  });
+  document.getElementById("admin-pref-page-next")?.addEventListener("click", () => {
+    if (prefPage < totalPages) {
+      prefPage++;
+      renderPrefsTableBody();
+    }
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      prefPage = Number(btn.dataset.page);
+      renderPrefsTableBody();
+    });
+  });
+}
+
+function renderPrefPreviewPanel(): void {
+  const panel = document.getElementById("admin-pref-preview");
+  if (!panel) return;
+
+  const pref = allPreferences.find((p) => p.id === previewPrefId);
+
+  if (!pref) {
+    panel.innerHTML = `<div class="admin-preview-empty">Оберіть запис зі списку, щоб переглянути&nbsp;деталі.</div>`;
+    return;
+  }
+
+  const icon = pref.tagIconUrl
+    ? `<img class="admin-preview__icon skeleton" src="${pref.tagIconUrl}" alt="" onload="this.classList.remove('skeleton')" onerror="this.remove()" />`
+    : `<span class="admin-preview__icon admin-preview__icon--placeholder"></span>`;
+
+  panel.innerHTML = `
+    <div class="admin-preview__header">
+      <h2 class="admin-preview__name">${escapeHtml(pref.tagName)}</h2>
+      <span class="admin-preview__id">ID: ${pref.id}</span>
+    </div>
+    ${icon}
+    <div class="admin-preview__field">
+      <span class="admin-preview__field-label">Користувач</span>
+      <p class="admin-preview__field-value">${escapeHtml(pref.userFullName)} (${escapeHtml(pref.userEmail)})</p>
+    </div>
+    <div class="admin-preview__field">
+      <span class="admin-preview__field-label">Додано</span>
+      <p class="admin-preview__field-value">${formatDateTime(pref.createdAt)}</p>
+    </div>
+    <div class="admin-preview__actions">
+      <button class="btn btn--ghost" id="admin-pref-preview-edit-btn" type="button">Редагувати</button>
+      <button class="btn btn--danger" id="admin-pref-preview-delete-btn" type="button">Видалити</button>
+    </div>`;
+  animatePreviewPanelIn(panel);
+
+  document.getElementById("admin-pref-preview-edit-btn")?.addEventListener("click", () => {
+    void openPrefModal({ type: "edit", id: pref.id });
+  });
+
+  document.getElementById("admin-pref-preview-delete-btn")?.addEventListener("click", () => {
+    void (async () => {
+      const confirmed = await confirmDelete(
+        "Видалити вподобання?",
+        `Вподобання «${pref.userFullName} → ${pref.tagName}» буде видалено безповоротно.`
+      );
+      if (!confirmed) return;
+      const result = await deleteUserTagPreference(pref.id);
+      if (!result.ok) {
+        window.alert(result.error);
+        return;
+      }
+      previewPrefId = null;
+      await loadAndRenderPrefs();
+    })();
+  });
+}
+
+function highlightActivePrefRow(): void {
+  const wrap = document.getElementById("admin-prefs-table-wrap");
+  if (!wrap) return;
+  wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.classList.toggle("admin-table__row--active", Number(tr.dataset.rowId) === previewPrefId);
+  });
+}
+
+function renderPrefsTableBody(): void {
+  const wrap = document.getElementById("admin-prefs-table-wrap");
+  if (!wrap) return;
+
+  if (!allPreferences.length) {
+    wrap.innerHTML = EMPTY_PREFS_HTML;
+    renderPrefPagination(0);
+    return;
+  }
+
+  const filtered = filteredPreferences();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PREF_PAGE_SIZE));
+  if (prefPage > totalPages) prefPage = totalPages;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="admin-categories-empty">Нічого не знайдено за запитом «${escapeHtml(
+      prefSearchQuery
+    )}».</div>`;
+    renderPrefPagination(0);
+    return;
+  }
+
+  const pageItems = filtered.slice((prefPage - 1) * PREF_PAGE_SIZE, prefPage * PREF_PAGE_SIZE);
+  const rowsHtml = pageItems.map(prefRowHtml).join("");
+
+  const existingTbody = wrap.querySelector<HTMLTableSectionElement>("tbody");
+  if (existingTbody) {
+    reconcileTableRows(existingTbody, rowsHtml);
+  } else {
+    wrap.innerHTML = `
+      <table class="admin-table">
+        ${PREF_TABLE_COLGROUP}
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Користувач</th>
+            <th></th>
+            <th>Тег</th>
+            <th>Додано</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  renderPrefPagination(filtered.length);
+}
+
+function setupPrefTableEvents(): void {
+  const wrap = document.getElementById("admin-prefs-table-wrap");
+  if (!wrap) return;
+
+  const openPreview = (id: number): void => {
+    previewPrefId = id;
+    highlightActivePrefRow();
+    renderPrefPreviewPanel();
+  };
+
+  wrap.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const previewBtn = target.closest<HTMLButtonElement>("[data-preview]");
+    if (previewBtn) {
+      openPreview(Number(previewBtn.dataset.preview));
+      return;
+    }
+
+    const editBtn = target.closest<HTMLButtonElement>("[data-edit]");
+    if (editBtn) {
+      const id = Number(editBtn.dataset.edit);
+      if (allPreferences.some((p) => p.id === id)) void openPrefModal({ type: "edit", id });
+      return;
+    }
+
+    const deleteBtn = target.closest<HTMLButtonElement>("[data-delete]");
+    if (deleteBtn) {
+      const id = Number(deleteBtn.dataset.delete);
+      const pref = allPreferences.find((p) => p.id === id);
+      if (!pref) return;
+
+      void (async () => {
+        const confirmed = await confirmDelete(
+          "Видалити вподобання?",
+          `Вподобання «${pref.userFullName} → ${pref.tagName}» буде видалено безповоротно.`
+        );
+        if (!confirmed) return;
+        const result = await deleteUserTagPreference(id);
+        if (!result.ok) {
+          window.alert(result.error);
+          return;
+        }
+        if (previewPrefId === id) previewPrefId = null;
+        await loadAndRenderPrefs();
+      })();
+      return;
+    }
+
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      const row = target.closest<HTMLTableRowElement>("tr[data-row-id]");
+      if (row) openPreview(Number(row.dataset.rowId));
+    }
+  });
+}
+
+async function loadAndRenderPrefs(): Promise<void> {
+  allPreferences = await getUserTagPreferences();
+  if (previewPrefId !== null && !allPreferences.some((p) => p.id === previewPrefId)) {
+    previewPrefId = null;
+  }
+  renderPrefsTableBody();
+  renderPrefPreviewPanel();
+}
+
+function setupPrefSearch(): void {
+  const input = document.getElementById("admin-pref-search") as HTMLInputElement | null;
+  const clearBtn = document.getElementById("admin-pref-search-clear") as HTMLButtonElement | null;
+  if (!input) return;
+
+  const syncClearBtn = (): void => {
+    clearBtn?.classList.toggle("admin-search-clear--visible", input.value.length > 0);
+  };
+
+  input.addEventListener("input", () => {
+    prefSearchQuery = input.value;
+    prefPage = 1;
+    syncClearBtn();
+    renderPrefsTableBody();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    prefSearchQuery = "";
+    prefPage = 1;
+    syncClearBtn();
+    renderPrefsTableBody();
+    input.focus();
+  });
+
+  syncClearBtn();
+}
+
+// ---- Модалка додавання вподобання (вибір користувача + тегу) ----
+
+function onPrefModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closePrefModal();
+}
+
+async function openPrefModal(mode: PrefModalMode): Promise<void> {
+  const modal = document.getElementById("admin-pref-modal");
+  const title = document.getElementById("admin-pref-modal-title");
+  const submitBtn = document.getElementById("admin-pref-modal-submit");
+  const userSelect = document.getElementById("admin-pref-user") as HTMLSelectElement | null;
+  const tagSelect = document.getElementById("admin-pref-tag") as HTMLSelectElement | null;
+  const message = document.getElementById("admin-pref-message");
+  const userError = document.getElementById("admin-pref-user-error");
+  const tagError = document.getElementById("admin-pref-tag-error");
+  if (!modal || !userSelect || !tagSelect) return;
+
+  prefModalMode = mode;
+
+  if (userError) userError.textContent = "";
+  if (tagError) tagError.textContent = "";
+  if (message) {
+    message.textContent = "";
+    message.classList.remove("form-message--visible", "form-message--error");
+  }
+
+  const editingPref = mode.type === "edit" ? allPreferences.find((p) => p.id === mode.id) : null;
+  if (title) title.textContent = mode.type === "edit" ? "Редагувати вподобання" : "Додати вподобання";
+  if (submitBtn) submitBtn.textContent = mode.type === "edit" ? "Зберегти" : "Додати вподобання";
+
+  userSelect.innerHTML = `<option value="">Завантаження…</option>`;
+  tagSelect.innerHTML = `<option value="">Завантаження…</option>`;
+
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onPrefModalKeydown);
+
+  const [users, tags] = await Promise.all([getAdminUsers(), allTags.length ? Promise.resolve(allTags) : getTags()]);
+
+  userSelect.innerHTML = users
+    .map((u: ApiAdminUser) => `<option value="${u.id}">${escapeHtml(u.fullName)} (${escapeHtml(u.email)})</option>`)
+    .join("");
+  tagSelect.innerHTML = tags.map((t: ApiTag) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("");
+
+  if (!users.length) userSelect.innerHTML = `<option value="">Немає користувачів</option>`;
+  if (!tags.length) tagSelect.innerHTML = `<option value="">Спочатку додайте тег</option>`;
+
+  if (editingPref) {
+    userSelect.value = editingPref.userId;
+    tagSelect.value = String(editingPref.tagId);
+  }
+}
+
+function closePrefModal(): void {
+  const modal = document.getElementById("admin-pref-modal");
+  if (!modal) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onPrefModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function setupPrefModal(): void {
+  const modal = document.getElementById("admin-pref-modal");
+  const closeBtn = document.getElementById("admin-pref-modal-close");
+  const backdrop = modal?.querySelector(".auth-modal__backdrop");
+  closeBtn?.addEventListener("click", closePrefModal);
+  backdrop?.addEventListener("click", closePrefModal);
+
+  const form = document.getElementById("admin-pref-form") as HTMLFormElement | null;
+  const message = document.getElementById("admin-pref-message");
+  const userSelect = document.getElementById("admin-pref-user") as HTMLSelectElement | null;
+  const tagSelect = document.getElementById("admin-pref-tag") as HTMLSelectElement | null;
+  if (!form || !userSelect || !tagSelect) return;
+
+  const showMessage = (text: string, isError: boolean): void => {
+    if (!message) return;
+    message.textContent = text;
+    message.classList.add("form-message--visible");
+    message.classList.toggle("form-message--error", isError);
+  };
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const userId = userSelect.value;
+    const tagId = Number(tagSelect.value);
+    if (!userId || !Number.isInteger(tagId)) return;
+
+    void (async () => {
+      const result =
+        prefModalMode.type === "edit"
+          ? await updateUserTagPreference(prefModalMode.id, { userId, tagId })
+          : await createUserTagPreference({ userId, tagId });
+
+      if (!result.ok) {
+        showMessage(result.error, true);
+        return;
+      }
+      closePrefModal();
+      await loadAndRenderPrefs();
+    })();
+  });
+}
+
+function renderUserPreferencesTable(): void {
+  const root = document.getElementById("admin-view");
+  if (!root) return;
+
+  prefSearchQuery = "";
+  prefPage = 1;
+  previewPrefId = null;
+
+  root.innerHTML = `
+    <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
+    <h1 class="admin-page__title">Вподобання користувачів</h1>
+
+    <div class="admin-categories-layout">
+      <section class="admin-section admin-section--wide">
+        <div class="admin-section__header">
+          <p class="admin-section__hint">Тут — теги, продукти з якими користувач ХОЧЕ бачити в каталозі й рекомендаціях.</p>
+          <button class="btn btn--primary-sm admin-add-btn" id="admin-add-pref-btn" type="button">+ Додати вподобання</button>
+        </div>
+
+        <div class="admin-table-toolbar">
+          <div class="admin-search-wrap">
+            <input type="text" id="admin-pref-search" class="admin-table-search" placeholder="Пошук за користувачем або тегом…" autocomplete="off" />
+            <button class="admin-search-clear" id="admin-pref-search-clear" type="button" aria-label="Очистити пошук">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-prefs-table-wrap" class="admin-table-wrap"></div>
+        <div id="admin-prefs-pagination" class="admin-pagination"></div>
+      </section>
+
+      <section class="admin-section admin-preview" id="admin-pref-preview"></section>
+    </div>`;
+
+  document.getElementById("admin-back-btn")?.addEventListener("click", () => {
+    window.location.hash = "";
+  });
+  document.getElementById("admin-add-pref-btn")?.addEventListener("click", () => {
+    void openPrefModal({ type: "create" });
+  });
+
+  setupPrefSearch();
+  setupPrefTableEvents();
+  renderPrefsTableSkeleton();
+  void loadAndRenderPrefs();
+}
+
+function renderPrefsTableSkeleton(): void {
+  const wrap = document.getElementById("admin-prefs-table-wrap");
+  if (wrap) wrap.innerHTML = "";
 }
 
 async function renderTableView(key: string): Promise<void> {
@@ -804,6 +1980,10 @@ async function renderTableView(key: string): Promise<void> {
 
   if (table.key === "categories") {
     renderCategoriesTable();
+  } else if (table.key === "tags") {
+    renderTagsTable();
+  } else if (table.key === "user_tag_preferences") {
+    renderUserPreferencesTable();
   } else {
     renderStub(table.label);
   }
@@ -816,20 +1996,22 @@ async function renderTableView(key: string): Promise<void> {
 // — резолвиться через Promise<boolean>, підходить для будь-якого рядка.
 // ==============================
 
-function confirmDelete(categoryName: string): Promise<boolean> {
+function confirmDelete(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     const modal = document.getElementById("admin-delete-modal");
+    const titleEl = document.getElementById("admin-delete-modal-title");
     const text = document.getElementById("admin-delete-modal-text");
     const cancelBtn = document.getElementById("admin-delete-modal-cancel");
     const confirmBtn = document.getElementById("admin-delete-modal-confirm");
     const closeBtn = document.getElementById("admin-delete-modal-close");
     const backdrop = modal?.querySelector(".auth-modal__backdrop");
     if (!modal || !cancelBtn || !confirmBtn || !closeBtn) {
-      resolve(window.confirm(`Видалити категорію «${categoryName}»?`));
+      resolve(window.confirm(message));
       return;
     }
 
-    if (text) text.textContent = `Категорію «${categoryName}» буде видалено безповоротно.`;
+    if (titleEl) titleEl.textContent = title;
+    if (text) text.textContent = message;
 
     const close = (result: boolean): void => {
       modal.classList.remove("auth-modal--open");
@@ -881,6 +2063,8 @@ async function render(): Promise<void> {
 
   setupUserMenu();
   setupCategoryModal();
+  setupTagModal();
+  setupPrefModal();
   setupSidebar();
 
   window.addEventListener("hashchange", renderRoute);
