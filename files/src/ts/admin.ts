@@ -39,43 +39,52 @@ import type { ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser } from "./
 interface TableDef {
   key: string;
   label: string;
+  // Короткий опис під заголовком картки (як на референсі).
+  description: string;
+  // Ім'я файлу іконки в assets/icons/ — малюється через mask-image,
+  // колір бере з CSS (самому файлу колір не важливий, головне —
+  // прозорий фон і суцільна заливка/лінії, той самий стиль, що й у
+  // .admin-sidebar__icon--*). Поки файла немає — коло просто лишається
+  // порожнім, нічого не ламається.
+  icon: string;
 }
 
 // Той самий список і порядок, що в server.js (ADMIN_TABLES) — оновлено
 // під нову ER-діаграму: "Типи інгредієнтів" і старі "Вподобання
 // користувачів" (по ingredient_type_id) прибрані, замість них — теги
 // (tags/product_tags) і вподобання по tag_id.
+//
+// icon: де підходила вже наявна іконка бічного меню — перевикористано
+// (users/orders/catalog/warehouse). Решта — нові файли, яких поки немає
+// в проєкті; імена узгоджені наперед, щоб додати можна було просто
+// скинувши png в assets/icons/ під тим самим іменем (mask-image бере
+// альфа-канал, колір самого файлу при рендері неважливий).
 const TABLES: TableDef[] = [
-  { key: "users", label: "Користувачі" },
-  { key: "sessions", label: "Сесії" },
-  { key: "payment_methods", label: "Методи оплати" },
-  { key: "orders", label: "Замовлення" },
-  { key: "order_items", label: "Продукти замовлення" },
-  { key: "products", label: "Продукти" },
-  { key: "categories", label: "Категорії" },
-  { key: "tags", label: "Теги" },
-  { key: "product_tags", label: "Теги продуктів" },
-  { key: "carts", label: "Кошики" },
-  { key: "cart_items", label: "Предмети кошика" },
-  { key: "wishlists", label: "Списки бажаного" },
-  { key: "ingredients", label: "Інгредієнти" },
-  { key: "product_recipes", label: "Рецепти продуктів" },
-  { key: "ingredient_movements", label: "Рух інгредієнтів" },
-  { key: "user_tag_preferences", label: "Вподобання користувачів" },
+  { key: "users", label: "Користувачі", description: "Інформація про зареєстрованих користувачів системи.", icon: "admin-users.png" },
+  { key: "sessions", label: "Сесії", description: "Активні сесії авторизованих користувачів.", icon: "admin-table-sessions.png" },
+  { key: "payment_methods", label: "Методи оплати", description: "Збережені способи оплати користувачів.", icon: "admin-table-payment-methods.png" },
+  { key: "orders", label: "Замовлення", description: "Замовлення покупців та їхні статуси.", icon: "admin-orders.png" },
+  { key: "order_items", label: "Продукти замовлення", description: "Товарні позиції у складі замовлень.", icon: "admin-table-order-items.png" },
+  { key: "products", label: "Продукти", description: "Каталог продукції — випічка та інші товари.", icon: "admin-table-products.png" },
+  { key: "categories", label: "Категорії", description: "Категорії, за якими згруповано продукти.", icon: "admin-catalog.png" },
+  { key: "tags", label: "Теги", description: "Теги для позначення особливостей продуктів.", icon: "admin-table-tags.png" },
+  { key: "product_tags", label: "Теги продуктів", description: "Зв'язки продуктів із тегами.", icon: "admin-table-product-tags.png" },
+  { key: "carts", label: "Кошики", description: "Кошики покупців — активні та гостьові.", icon: "admin-table-carts.png" },
+  { key: "cart_items", label: "Предмети кошика", description: "Товари, додані до кошиків.", icon: "admin-table-cart-items.png" },
+  { key: "wishlists", label: "Списки бажаного", description: "Списки бажаного користувачів.", icon: "admin-table-wishlists.png" },
+  { key: "ingredients", label: "Інгредієнти", description: "Сировина, що використовується у виробництві.", icon: "admin-warehouse.png" },
+  { key: "product_recipes", label: "Рецепти продуктів", description: "Норми витрати інгредієнтів на продукт.", icon: "admin-table-product-recipes.png" },
+  { key: "ingredient_movements", label: "Рух інгредієнтів", description: "Журнал руху інгредієнтів на складі.", icon: "admin-table-ingredient-movements.png" },
+  { key: "user_tag_preferences", label: "Вподобання користувачів", description: "Вподобання користувачів за тегами продуктів.", icon: "admin-table-user-preferences.png" },
 ];
 
-// Теплі тони в стилі бренду (--color-accent), по колу — щоб плитки
-// відрізнялись одна від одної, як на референсі.
-const TILE_COLORS = [
-  "#F4C978",
-  "#E8B04C",
-  "#F0DDA0",
-  "#DE9A5C",
-  "#F6E2B8",
-  "#E7A96B",
-  "#F1C79A",
-  "#D98C4A",
-];
+function formatLastUpdated(ts: number | null | undefined): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 
 function pluralizeRecords(n: number): string {
   const mod100 = n % 100;
@@ -262,18 +271,35 @@ function updateFooterVisibility(): void {
 // Головна: плитки таблиць
 // ==============================
 
+// Стрілка "перейти в таблицю" праворуч знизу картки — inline SVG (не
+// окремий файл), той самий підхід, що й для соцкнопок у футері нижче.
+const CARD_ARROW_SVG = `
+  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M4.5 10H15.5M15.5 10L11 5.5M15.5 10L11 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+
 async function renderHome(): Promise<void> {
   const root = document.getElementById("admin-view");
   if (!root) return;
 
   root.innerHTML = `
     <h1 class="admin-page__title">Таблиці бази даних</h1>
-    <div class="admin-tiles">
+    <div class="admin-cards">
       ${TABLES.map(
-        (t, i) => `
-        <button class="admin-tile" type="button" data-table="${t.key}" style="background:${TILE_COLORS[i % TILE_COLORS.length]}">
-          <span class="admin-tile__label">${t.label}</span>
-          <span class="admin-tile__count" id="admin-tile-count-${t.key}"></span>
+        (t) => `
+        <button class="admin-card" type="button" data-table="${t.key}">
+          <div class="admin-card__top">
+            <span class="admin-card__icon">
+              <span class="admin-card__icon-glyph" style="mask-image:url(assets/icons/${t.icon});-webkit-mask-image:url(assets/icons/${t.icon})"></span>
+            </span>
+            <h3 class="admin-card__title">${t.label}</h3>
+          </div>
+          <p class="admin-card__desc">${t.description}</p>
+          <span class="admin-card__count" id="admin-tile-count-${t.key}">…</span>
+          <div class="admin-card__footer">
+            <span class="admin-card__updated" id="admin-tile-updated-${t.key}"></span>
+            <span class="admin-card__arrow">${CARD_ARROW_SVG}</span>
+          </div>
         </button>`
       ).join("")}
     </div>`;
@@ -284,11 +310,13 @@ async function renderHome(): Promise<void> {
     });
   });
 
-  const counts = await getTableCounts();
-  if (!counts) return;
+  const data = await getTableCounts();
+  if (!data) return;
   for (const t of TABLES) {
-    const el = document.getElementById(`admin-tile-count-${t.key}`);
-    if (el && counts[t.key] !== undefined) el.textContent = pluralizeRecords(counts[t.key]);
+    const countEl = document.getElementById(`admin-tile-count-${t.key}`);
+    if (countEl && data.counts[t.key] !== undefined) countEl.textContent = pluralizeRecords(data.counts[t.key]);
+    const updatedEl = document.getElementById(`admin-tile-updated-${t.key}`);
+    if (updatedEl) updatedEl.textContent = `Останнє оновлення: ${formatLastUpdated(data.lastUpdated[t.key])}`;
   }
 }
 

@@ -268,45 +268,46 @@
   mask-size: contain;
 }
 
-/* Кожна іконка — окремий файл в assets/icons/ (не inline SVG, щоб
-   лежали в проєкті як звичайні асети) — recolor через CSS-маску, а не
-   <img>, саме тому, щоб колір іконки й далі йшов за currentColor
-   (сірий за замовчуванням, білий на активному пункті меню) — при
-   <img src="...svg"> лежав би фіксований колір із самого файлу,
-   незалежно від того, активний пункт чи ні. */
+/* Кожна іконка — окремий файл в assets/icons/ (.png) — recolor через
+   CSS-маску, а не <img>, саме тому, щоб колір іконки й далі йшов за
+   currentColor (сірий за замовчуванням, білий на активному пункті
+   меню) — при <img src="...png"> лежав би фіксований колір із самого
+   файлу, незалежно від того, активний пункт чи ні. mask-image працює
+   і з .png так само, як із .svg (бере альфа-канал), тож формат файлу
+   можна міняти, не чіпаючи цю техніку. */
 .admin-sidebar__icon--home {
-  -webkit-mask-image: url(../../assets/icons/admin-home.svg);
-  mask-image: url(../../assets/icons/admin-home.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-home.png);
+  mask-image: url(../../assets/icons/admin-home.png);
 }
 
 .admin-sidebar__icon--catalog {
-  -webkit-mask-image: url(../../assets/icons/admin-catalog.svg);
-  mask-image: url(../../assets/icons/admin-catalog.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-catalog.png);
+  mask-image: url(../../assets/icons/admin-catalog.png);
 }
 
 .admin-sidebar__icon--orders {
-  -webkit-mask-image: url(../../assets/icons/admin-orders.svg);
-  mask-image: url(../../assets/icons/admin-orders.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-orders.png);
+  mask-image: url(../../assets/icons/admin-orders.png);
 }
 
 .admin-sidebar__icon--users {
-  -webkit-mask-image: url(../../assets/icons/admin-users.svg);
-  mask-image: url(../../assets/icons/admin-users.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-users.png);
+  mask-image: url(../../assets/icons/admin-users.png);
 }
 
 .admin-sidebar__icon--warehouse {
-  -webkit-mask-image: url(../../assets/icons/admin-warehouse.svg);
-  mask-image: url(../../assets/icons/admin-warehouse.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-warehouse.png);
+  mask-image: url(../../assets/icons/admin-warehouse.png);
 }
 
 .admin-sidebar__icon--analytics {
-  -webkit-mask-image: url(../../assets/icons/admin-analytics.svg);
-  mask-image: url(../../assets/icons/admin-analytics.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-analytics.png);
+  mask-image: url(../../assets/icons/admin-analytics.png);
 }
 
 .admin-sidebar__icon--settings {
-  -webkit-mask-image: url(../../assets/icons/admin-settings.svg);
-  mask-image: url(../../assets/icons/admin-settings.svg);
+  -webkit-mask-image: url(../../assets/icons/admin-settings.png);
+  mask-image: url(../../assets/icons/admin-settings.png);
 }
 
 .admin-sidebar__group-label {
@@ -720,46 +721,120 @@
   }
 }
 
-/* ---- Плитки таблиць (головна admin-панелі) ---- */
+/* ---- Картки таблиць (головна admin-панелі) ---- */
 
-.admin-tiles {
+.admin-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-4);
 }
 
-.admin-tile {
+.admin-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-6);
-  min-height: 132px;
-  padding: var(--space-4);
-  border: none;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   text-align: left;
   color: var(--color-text);
-  transition: transform 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .admin-tile:hover {
+  .admin-card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(43, 29, 20, 0.08), 0 10px 22px rgba(43, 29, 20, 0.08);
   }
 }
 
-.admin-tile__label {
+.admin-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+/* Коло під іконку — саме зображення тягнеться mask-image'ом у
+   .admin-card__icon-glyph, тож файл іконки може прийти пізніше:
+   поки його немає, лишається просто порожнє тепле коло, нічого не
+   зламано. */
+.admin-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+}
+
+.admin-card__icon-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background-color: var(--color-accent-dark);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.admin-card__title {
   font-size: var(--fs-md);
   font-weight: 700;
   line-height: 1.25;
 }
 
-.admin-tile__count {
+.admin-card__desc {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.admin-card__count {
   font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--color-text);
-  opacity: 0.65;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  background: var(--color-surface-muted);
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.admin-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.admin-card__updated {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-card__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.admin-card__arrow svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* ---- Таблиця записів (категорії, поки єдина робоча) ---- */

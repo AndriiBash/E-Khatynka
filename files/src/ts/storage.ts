@@ -387,12 +387,25 @@ export async function setMyTagPreference(tagId: number, enabled: boolean): Promi
 // головній admin.html).
 // ==============================
 
-export async function getTableCounts(): Promise<Record<string, number> | null> {
+export interface AdminTableCounts {
+  counts: Record<string, number>;
+  // Епох-мс останнього created_at/added_at у таблиці, або null — у
+  // таблиць без такої колонки (products, categories, tags,
+  // product_tags, ingredients, product_recipes, order_items).
+  lastUpdated: Record<string, number | null>;
+}
+
+export async function getTableCounts(): Promise<AdminTableCounts | null> {
   try {
     const res = await fetch("/api/admin/table-counts", { credentials: "include" });
     if (!res.ok) return null;
-    const data = (await res.json()) as { ok: boolean; counts?: Record<string, number> };
-    return data.counts ?? null;
+    const data = (await res.json()) as {
+      ok: boolean;
+      counts?: Record<string, number>;
+      lastUpdated?: Record<string, number | null>;
+    };
+    if (!data.counts) return null;
+    return { counts: data.counts, lastUpdated: data.lastUpdated ?? {} };
   } catch {
     return null;
   }

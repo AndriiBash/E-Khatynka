@@ -953,12 +953,31 @@ const ADMIN_TABLES = [
   "user_tag_preferences",
 ];
 
+// Не всі таблиці мають колонку часу — там, де немає (products,
+// categories, tags, product_tags, ingredients, product_recipes,
+// order_items), lastUpdated просто прийде null, і фронтенд це
+// врахує (покаже "—" замість дати).
+const ADMIN_TABLE_TIMESTAMP_COLUMN = {
+  users: "created_at",
+  sessions: "created_at",
+  payment_methods: "created_at",
+  orders: "created_at",
+  carts: "created_at",
+  cart_items: "added_at",
+  wishlists: "created_at",
+  ingredient_movements: "created_at",
+  user_tag_preferences: "created_at",
+};
+
 app.get("/api/admin/table-counts", requireAdmin, (req, res) => {
   const counts = {};
+  const lastUpdated = {};
   for (const table of ADMIN_TABLES) {
     counts[table] = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+    const col = ADMIN_TABLE_TIMESTAMP_COLUMN[table];
+    lastUpdated[table] = col ? db.prepare(`SELECT MAX(${col}) AS ts FROM ${table}`).get().ts : null;
   }
-  res.json({ ok: true, counts });
+  res.json({ ok: true, counts, lastUpdated });
 });
 
 // Для будь-якого невідомого шляху без розширення файлу (тобто це не
