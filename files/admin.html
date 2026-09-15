@@ -233,6 +233,33 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="admin-user-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-user-modal-title">
+      <button class="auth-modal__close" id="admin-user-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-user-modal-title">Редагувати користувача</h2>
+      <p class="auth-modal__subtitle">Email змінити не можна — це логін користувача: <span id="admin-user-email-hint"></span></p>
+      <form id="admin-user-form" novalidate>
+        <div class="field">
+          <label for="admin-user-name">Ім'я та прізвище</label>
+          <input type="text" id="admin-user-name" name="fullName" autocomplete="off" />
+          <span class="field-error" id="admin-user-name-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-user-phone">Телефон</label>
+          <input type="tel" id="admin-user-phone" name="phone" autocomplete="off" placeholder="+380..." />
+          <span class="field-error" id="admin-user-phone-error"></span>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-user-modal-submit">Зберегти</button>
+        <p class="form-message" id="admin-user-message"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="auth-modal" id="admin-delete-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-modal-title">

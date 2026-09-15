@@ -16,12 +16,16 @@ import {
   updateUserTagPreference,
   deleteUserTagPreference,
   getAdminUsers,
+  updateAdminUser,
+  deleteAdminUser,
+  getAdminSessions,
+  deleteAdminSession,
   getTableCounts,
 } from "./storage.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
 import { userMenuHtml, setupUserMenu } from "./user-menu.js";
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
-import type { ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser } from "./types.js";
+import type { ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser, ApiAdminSession } from "./types.js";
 
 // ==============================
 // Адмін-панель. Головна — плитки з назвами таблиць БД (той самий
@@ -1518,6 +1522,14 @@ function formatDateTime(ms: number): string {
   return new Date(ms).toLocaleString("uk-UA", { dateStyle: "medium", timeStyle: "short" });
 }
 
+// Компактний варіант для клітинок таблиці: "11.09.2026, 12:23" замість
+// "11 вер. 2026 р., 12:23" — той самий зміст, але вдвічі вужче, тож
+// колонка з датою більше не обрізається трьома крапками. У картці
+// перегляду праворуч місця вистачає, там лишається повний формат.
+function formatDateTimeShort(ms: number): string {
+  return new Date(ms).toLocaleString("uk-UA", { dateStyle: "short", timeStyle: "short" });
+}
+
 function filteredPreferences(): ApiUserTagPreference[] {
   const q = prefSearchQuery.trim().toLowerCase();
   if (!q) return allPreferences;
@@ -1540,7 +1552,7 @@ function prefRowHtml(p: ApiUserTagPreference): string {
       </td>
       <td class="admin-table__icon-cell">${icon}</td>
       <td class="admin-table__name-cell" title="${escapeHtml(p.tagName)}">${escapeHtml(p.tagName)}</td>
-      <td class="admin-table__description-cell">${formatDateTime(p.createdAt)}</td>
+      <td class="admin-table__description-cell">${formatDateTimeShort(p.createdAt)}</td>
       <td class="admin-table__actions-cell">
         <div class="admin-table__actions">
           <button class="admin-table__preview-btn" data-preview="${p.id}" type="button" aria-label="Переглянути">
@@ -1652,14 +1664,10 @@ function renderPrefPreviewPanel(): void {
       <span class="admin-preview__id">ID: ${pref.id}</span>
     </div>
     ${icon}
-    <div class="admin-preview__field">
-      <span class="admin-preview__field-label">Користувач</span>
-      <p class="admin-preview__field-value">${escapeHtml(pref.userFullName)} (${escapeHtml(pref.userEmail)})</p>
-    </div>
-    <div class="admin-preview__field">
-      <span class="admin-preview__field-label">Додано</span>
-      <p class="admin-preview__field-value">${formatDateTime(pref.createdAt)}</p>
-    </div>
+    ${previewFieldHtml("user", "Користувач", escapeHtml(pref.userFullName))}
+    ${previewFieldHtml("email", "Email", escapeHtml(pref.userEmail))}
+    ${previewFieldHtml("tag", "Тег", escapeHtml(pref.tagName))}
+    ${previewFieldHtml("calendar", "Додано", formatDateTime(pref.createdAt))}
     <div class="admin-preview__actions">
       <button class="btn btn--ghost" id="admin-pref-preview-edit-btn" type="button">Редагувати</button>
       <button class="btn btn--danger" id="admin-pref-preview-delete-btn" type="button">Видалити</button>
@@ -1999,6 +2007,925 @@ function renderPrefsTableSkeleton(): void {
   if (wrap) wrap.innerHTML = "";
 }
 
+// ==============================
+// "Користувачі" — лише перегляд + видалення (без модалки додавання:
+// користувачі реєструються самі через форму на сайті, адмінка тут не
+// створює акаунти вручну, як категорії/теги).
+// ==============================
+
+let allUsers: ApiAdminUser[] = [];
+let userSearchQuery = "";
+let userPage = 1;
+let previewUserId: string | null = null;
+const USER_PAGE_SIZE = 8;
+
+function filteredUsers(): ApiAdminUser[] {
+  const q = userSearchQuery.trim().toLowerCase();
+  if (!q) return allUsers;
+  return allUsers.filter(
+    (u) =>
+      u.fullName.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      u.phone.toLowerCase().includes(q)
+  );
+}
+
+function userRoleBadgeHtml(role: string): string {
+  const isAdmin = role === "admin";
+  return `<span class="admin-table__badge${isAdmin ? " admin-table__badge--accent" : ""}">${
+    isAdmin ? "Адміністратор" : "Покупець"
+  }</span>`;
+}
+
+function userRowHtml(u: ApiAdminUser): string {
+  return `
+    <tr class="${u.id === previewUserId ? "admin-table__row--active" : ""}" data-row-id="${escapeHtml(u.id)}">
+      <td class="admin-table__user-cell" title="${escapeHtml(u.fullName)}">
+        <span class="admin-table__user-name">${escapeHtml(u.fullName)}</span>
+        <span class="admin-table__subtext">${escapeHtml(u.email)}</span>
+      </td>
+      <td class="admin-table__description-cell">${escapeHtml(u.phone)}</td>
+      <td class="admin-table__description-cell admin-table__badge-cell">${userRoleBadgeHtml(u.role)}</td>
+      <td class="admin-table__description-cell">${formatDateTimeShort(u.createdAt)}</td>
+      <td class="admin-table__actions-cell">
+        <div class="admin-table__actions">
+          <button class="admin-table__preview-btn" data-preview="${escapeHtml(u.id)}" type="button" aria-label="Переглянути">
+            ${actionIconHtml("preview")}<span class="admin-table__action-label">Переглянути</span>
+          </button>
+          <button class="admin-table__edit-btn" data-edit="${escapeHtml(u.id)}" type="button" aria-label="Редагувати">
+            ${actionIconHtml("edit")}<span class="admin-table__action-label">Редагувати</span>
+          </button>
+          <button class="admin-table__delete-btn" data-delete="${escapeHtml(u.id)}" type="button" aria-label="Видалити">
+            ${actionIconHtml("delete")}<span class="admin-table__action-label">Видалити</span>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+// Ширини підрізані під реальний вміст (телефон/роль/дата — фіксовані,
+// імʼя+email тягнеться рештою). Було ширше — і разом із панеллю
+// перегляду праворуч таблиця не влазила в картку: зʼявлявся
+// горизонтальний скрол, а браузер при кліку на кнопку «око» ще й
+// підкручував його до цієї кнопки — тому перша колонка
+// («Користувач») просто зникала з очей, а «кошик» лишався
+// підрізаним. Тепер сума колонок менша за картку, і скролити нічого
+// не треба. Остання колонка — 3 кнопки по 36px + відступи.
+const USER_TABLE_COLGROUP = `
+  <colgroup>
+    <col />
+    <col style="width:125px" />
+    <col style="width:150px" />
+    <col style="width:110px" />
+    <col style="width:150px" />
+  </colgroup>`;
+
+const EMPTY_USERS_HTML = `<div class="admin-categories-empty">Користувачів ще немає.</div>`;
+
+function renderUserPagination(filteredCount: number): void {
+  const el = document.getElementById("admin-users-pagination");
+  if (!el) return;
+
+  if (filteredCount === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / USER_PAGE_SIZE));
+  const start = (userPage - 1) * USER_PAGE_SIZE + 1;
+  const end = Math.min(userPage * USER_PAGE_SIZE, filteredCount);
+  const summary = `<p class="admin-pagination__summary">Показано ${start}–${end} з ${pluralizeRecords(filteredCount)}</p>`;
+
+  if (totalPages <= 1) {
+    el.innerHTML = summary;
+    return;
+  }
+
+  let pageButtons = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pageButtons += `<button class="admin-pagination__page${
+      p === userPage ? " admin-pagination__page--active" : ""
+    }" data-page="${p}" type="button">${p}</button>`;
+  }
+
+  el.innerHTML = `
+    ${summary}
+    <div class="admin-pagination__controls">
+      <button class="admin-pagination__arrow" id="admin-user-page-prev" type="button" aria-label="Попередня сторінка" ${
+        userPage === 1 ? "disabled" : ""
+      }>‹</button>
+      ${pageButtons}
+      <button class="admin-pagination__arrow" id="admin-user-page-next" type="button" aria-label="Наступна сторінка" ${
+        userPage === totalPages ? "disabled" : ""
+      }>›</button>
+    </div>`;
+
+  document.getElementById("admin-user-page-prev")?.addEventListener("click", () => {
+    if (userPage > 1) {
+      userPage--;
+      renderUsersTableBody();
+    }
+  });
+  document.getElementById("admin-user-page-next")?.addEventListener("click", () => {
+    if (userPage < totalPages) {
+      userPage++;
+      renderUsersTableBody();
+    }
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      userPage = Number(btn.dataset.page);
+      renderUsersTableBody();
+    });
+  });
+}
+
+function formatCurrency(amount: number): string {
+  return `${Math.round(amount).toLocaleString("uk-UA")} ₴`;
+}
+
+// Іконки рядків у картках перегляду (користувач/сесія/вподобання) —
+// окремі файли в assets/icons/admin-preview-*.png, як і решта іконок
+// адмінки. Малюються через mask-image, а не <img>: колір бере CSS
+// (--color-text-muted), тож самі файли — просто чорний силует на
+// прозорому фоні. Одну й ту саму іконку спокійно ділять кілька
+// таблиць (дата реєстрації / дата додавання — той самий календар).
+const PREVIEW_ICONS = {
+  email: "admin-preview-email.png",
+  phone: "admin-preview-phone.png",
+  calendar: "admin-preview-calendar.png",
+  orders: "admin-preview-orders.png",
+  wallet: "admin-preview-wallet.png",
+  user: "admin-preview-user.png",
+  tag: "admin-preview-tag.png",
+  clock: "admin-preview-clock.png",
+  key: "admin-preview-key.png",
+  shield: "admin-preview-shield.png",
+  hash: "admin-preview-hash.png",
+} as const;
+
+type PreviewIconName = keyof typeof PREVIEW_ICONS;
+
+function previewFieldHtml(icon: PreviewIconName, label: string, value: string): string {
+  const file = PREVIEW_ICONS[icon];
+  return `
+    <div class="admin-preview__field admin-preview__field--icon">
+      <span class="admin-preview__field-icon">
+        <span class="admin-preview__field-icon-glyph" style="mask-image:url(assets/icons/${file});-webkit-mask-image:url(assets/icons/${file})"></span>
+      </span>
+      <div class="admin-preview__field-text">
+        <span class="admin-preview__field-label">${label}</span>
+        <p class="admin-preview__field-value">${value}</p>
+      </div>
+    </div>`;
+}
+
+function renderUserPreviewPanel(): void {
+  const panel = document.getElementById("admin-user-preview");
+  if (!panel) return;
+
+  const user = allUsers.find((u) => u.id === previewUserId);
+  if (!user) {
+    panel.innerHTML = `<div class="admin-preview-empty">Оберіть користувача зі списку, щоб переглянути&nbsp;деталі.</div>`;
+    return;
+  }
+
+  const initial = user.fullName.trim().charAt(0).toUpperCase() || "?";
+
+  panel.innerHTML = `
+    <div class="admin-preview__user-header">
+      <span class="admin-preview__avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+      <div>
+        <h2 class="admin-preview__name">${escapeHtml(user.fullName)}</h2>
+        ${userRoleBadgeHtml(user.role)}
+      </div>
+    </div>
+
+    ${previewFieldHtml("email", "Email", escapeHtml(user.email))}
+    ${previewFieldHtml("phone", "Телефон", escapeHtml(user.phone))}
+    ${previewFieldHtml("calendar", "Дата реєстрації", formatDateTime(user.createdAt))}
+
+    <h3 class="admin-preview__section-title">Додаткова інформація</h3>
+    ${previewFieldHtml("orders", "Кількість замовлень", String(user.orderCount))}
+    ${previewFieldHtml("wallet", "Загальна сума покупок", formatCurrency(user.totalSpent))}
+
+    <div class="admin-preview__actions">
+      <button class="btn btn--ghost" id="admin-user-preview-edit-btn" type="button">Редагувати</button>
+      <button class="btn btn--danger" id="admin-user-preview-delete-btn" type="button">Видалити</button>
+    </div>`;
+  animatePreviewPanelIn(panel);
+
+  document.getElementById("admin-user-preview-edit-btn")?.addEventListener("click", () => {
+    openUserModal(user.id);
+  });
+
+  document.getElementById("admin-user-preview-delete-btn")?.addEventListener("click", () => {
+    void (async () => {
+      const confirmed = await confirmDelete(
+        "Видалити користувача?",
+        `Акаунт «${user.fullName}» (${user.email}) буде видалено безповоротно.`
+      );
+      if (!confirmed) return;
+      const result = await deleteAdminUser(user.id);
+      if (!result.ok) {
+        window.alert(result.error);
+        return;
+      }
+      previewUserId = null;
+      await loadAndRenderUsers();
+    })();
+  });
+}
+
+function highlightActiveUserRow(): void {
+  const wrap = document.getElementById("admin-users-table-wrap");
+  if (!wrap) return;
+  wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.classList.toggle("admin-table__row--active", tr.dataset.rowId === previewUserId);
+  });
+}
+
+function renderUsersTableBody(): void {
+  const wrap = document.getElementById("admin-users-table-wrap");
+  if (!wrap) return;
+
+  if (!allUsers.length) {
+    wrap.innerHTML = EMPTY_USERS_HTML;
+    renderUserPagination(0);
+    return;
+  }
+
+  const filtered = filteredUsers();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / USER_PAGE_SIZE));
+  if (userPage > totalPages) userPage = totalPages;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="admin-categories-empty">Нічого не знайдено за запитом «${escapeHtml(
+      userSearchQuery
+    )}».</div>`;
+    renderUserPagination(0);
+    return;
+  }
+
+  const pageItems = filtered.slice((userPage - 1) * USER_PAGE_SIZE, userPage * USER_PAGE_SIZE);
+  const rowsHtml = pageItems.map(userRowHtml).join("");
+
+  const existingTbody = wrap.querySelector<HTMLTableSectionElement>("tbody");
+  if (existingTbody) {
+    reconcileTableRows(existingTbody, rowsHtml);
+  } else {
+    wrap.innerHTML = `
+      <table class="admin-table">
+        ${USER_TABLE_COLGROUP}
+        <thead>
+          <tr>
+            <th>Користувач</th>
+            <th>Телефон</th>
+            <th>Роль</th>
+            <th>Дата реєстрації</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  renderUserPagination(filtered.length);
+}
+
+function setupUserTableEvents(): void {
+  const wrap = document.getElementById("admin-users-table-wrap");
+  if (!wrap) return;
+
+  const openPreview = (id: string): void => {
+    previewUserId = id;
+    highlightActiveUserRow();
+    renderUserPreviewPanel();
+  };
+
+  wrap.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const previewBtn = target.closest<HTMLButtonElement>("[data-preview]");
+    if (previewBtn) {
+      openPreview(String(previewBtn.dataset.preview));
+      return;
+    }
+
+    const editBtn = target.closest<HTMLButtonElement>("[data-edit]");
+    if (editBtn) {
+      openUserModal(String(editBtn.dataset.edit));
+      return;
+    }
+
+    const deleteBtn = target.closest<HTMLButtonElement>("[data-delete]");
+    if (deleteBtn) {
+      const id = String(deleteBtn.dataset.delete);
+      const user = allUsers.find((u) => u.id === id);
+      if (!user) return;
+
+      void (async () => {
+        const confirmed = await confirmDelete(
+          "Видалити користувача?",
+          `Акаунт «${user.fullName}» (${user.email}) буде видалено безповоротно.`
+        );
+        if (!confirmed) return;
+        const result = await deleteAdminUser(id);
+        if (!result.ok) {
+          window.alert(result.error);
+          return;
+        }
+        if (previewUserId === id) previewUserId = null;
+        await loadAndRenderUsers();
+      })();
+      return;
+    }
+
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      const row = target.closest<HTMLTableRowElement>("tr[data-row-id]");
+      if (row) openPreview(String(row.dataset.rowId));
+    }
+  });
+}
+
+async function loadAndRenderUsers(): Promise<void> {
+  allUsers = await getAdminUsers();
+  if (previewUserId !== null && !allUsers.some((u) => u.id === previewUserId)) {
+    previewUserId = null;
+  }
+  renderUsersTableBody();
+  renderUserPreviewPanel();
+}
+
+function setupUserSearch(): void {
+  const input = document.getElementById("admin-user-search") as HTMLInputElement | null;
+  const clearBtn = document.getElementById("admin-user-search-clear") as HTMLButtonElement | null;
+  if (!input) return;
+
+  const syncClearBtn = (): void => {
+    clearBtn?.classList.toggle("admin-search-clear--visible", input.value.length > 0);
+  };
+
+  input.addEventListener("input", () => {
+    userSearchQuery = input.value;
+    userPage = 1;
+    syncClearBtn();
+    renderUsersTableBody();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    userSearchQuery = "";
+    userPage = 1;
+    syncClearBtn();
+    renderUsersTableBody();
+    input.focus();
+  });
+
+  syncClearBtn();
+}
+
+// ---- Модалка редагування користувача (імʼя + телефон) ----
+//
+// Навмисно без створення акаунтів: користувачі реєструються самі, а
+// адмін лише править контактні дані. Email тут теж не редагується — це
+// логін (UNIQUE у схемі), його зміна вимагала б підтвердження пошти,
+// тож показуємо його тільки для довідки, полем-«читалкою».
+
+let userModalId: string | null = null;
+
+function onUserModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeUserModal();
+}
+
+function openUserModal(id: string): void {
+  const modal = document.getElementById("admin-user-modal");
+  const nameInput = document.getElementById("admin-user-name") as HTMLInputElement | null;
+  const phoneInput = document.getElementById("admin-user-phone") as HTMLInputElement | null;
+  const emailHint = document.getElementById("admin-user-email-hint");
+  const nameError = document.getElementById("admin-user-name-error");
+  const phoneError = document.getElementById("admin-user-phone-error");
+  const message = document.getElementById("admin-user-message");
+  if (!modal || !nameInput || !phoneInput) return;
+
+  const user = allUsers.find((u) => u.id === id);
+  if (!user) return;
+
+  userModalId = id;
+
+  if (nameError) nameError.textContent = "";
+  if (phoneError) phoneError.textContent = "";
+  nameInput.classList.remove("input--invalid");
+  phoneInput.classList.remove("input--invalid");
+  if (message) {
+    message.textContent = "";
+    message.classList.remove("form-message--visible", "form-message--error");
+  }
+
+  nameInput.value = user.fullName;
+  phoneInput.value = user.phone;
+  if (emailHint) emailHint.textContent = user.email;
+
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onUserModalKeydown);
+  nameInput.focus();
+}
+
+function closeUserModal(): void {
+  const modal = document.getElementById("admin-user-modal");
+  if (!modal) return;
+  userModalId = null;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onUserModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function setupUserModal(): void {
+  const modal = document.getElementById("admin-user-modal");
+  const closeBtn = document.getElementById("admin-user-modal-close");
+  const backdrop = modal?.querySelector(".auth-modal__backdrop");
+  closeBtn?.addEventListener("click", closeUserModal);
+  backdrop?.addEventListener("click", closeUserModal);
+
+  const form = document.getElementById("admin-user-form") as HTMLFormElement | null;
+  const nameInput = document.getElementById("admin-user-name") as HTMLInputElement | null;
+  const phoneInput = document.getElementById("admin-user-phone") as HTMLInputElement | null;
+  const nameError = document.getElementById("admin-user-name-error");
+  const phoneError = document.getElementById("admin-user-phone-error");
+  const message = document.getElementById("admin-user-message");
+  if (!form || !nameInput || !phoneInput) return;
+
+  const showMessage = (text: string, isError: boolean): void => {
+    if (!message) return;
+    message.textContent = text;
+    message.classList.add("form-message--visible");
+    message.classList.toggle("form-message--error", isError);
+  };
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!userModalId) return;
+
+    const fullName = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    // Та сама перевірка, що й на реєстрації (server.js їх усе одно
+    // продублює) — просто щоб не ганяти запит заради очевидної помилки.
+    let valid = true;
+    if (fullName.length < 2) {
+      if (nameError) nameError.textContent = "Введіть ім'я та прізвище";
+      nameInput.classList.add("input--invalid");
+      valid = false;
+    } else {
+      if (nameError) nameError.textContent = "";
+      nameInput.classList.remove("input--invalid");
+    }
+
+    if (!/^\+?\d{9,13}$/.test(phone.replace(/[\s()-]/g, ""))) {
+      if (phoneError) phoneError.textContent = "Введіть коректний номер телефону";
+      phoneInput.classList.add("input--invalid");
+      valid = false;
+    } else {
+      if (phoneError) phoneError.textContent = "";
+      phoneInput.classList.remove("input--invalid");
+    }
+
+    if (!valid) return;
+
+    void (async () => {
+      const result = await updateAdminUser(userModalId as string, { fullName, phone });
+      if (!result.ok) {
+        showMessage(result.error, true);
+        return;
+      }
+      closeUserModal();
+      await loadAndRenderUsers();
+    })();
+  });
+}
+
+function renderUsersTable(): void {
+  const root = document.getElementById("admin-view");
+  if (!root) return;
+
+  userSearchQuery = "";
+  userPage = 1;
+  previewUserId = null;
+
+  root.innerHTML = `
+    <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
+    <h1 class="admin-page__title">Користувачі</h1>
+
+    <div class="admin-categories-layout">
+      <section class="admin-section admin-section--wide">
+        <div class="admin-section__header">
+          <p class="admin-section__hint">Зареєстровані користувачі системи — покупці й адміністратори.</p>
+        </div>
+
+        <div class="admin-table-toolbar">
+          <div class="admin-search-wrap">
+            <input type="text" id="admin-user-search" class="admin-table-search" placeholder="Пошук за ім'ям, email або телефоном…" autocomplete="off" />
+            <button class="admin-search-clear" id="admin-user-search-clear" type="button" aria-label="Очистити пошук">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-users-table-wrap" class="admin-table-wrap"></div>
+        <div id="admin-users-pagination" class="admin-pagination"></div>
+      </section>
+
+      <section class="admin-section admin-preview" id="admin-user-preview"></section>
+    </div>`;
+
+  document.getElementById("admin-back-btn")?.addEventListener("click", () => {
+    window.location.hash = "";
+  });
+
+  setupUserSearch();
+  setupUserTableEvents();
+  void loadAndRenderUsers();
+}
+
+// ==============================
+// "Сесії" — лише перегляд + примусове завершення сесії (видалення
+// рядка). Так само без модалки додавання — сесія створюється сама при
+// вході, вручну тут нічого не заводять.
+// ==============================
+
+let allSessions: ApiAdminSession[] = [];
+let sessionSearchQuery = "";
+let sessionPage = 1;
+let previewSessionToken: string | null = null;
+const SESSION_PAGE_SIZE = 8;
+
+function filteredSessions(): ApiAdminSession[] {
+  const q = sessionSearchQuery.trim().toLowerCase();
+  if (!q) return allSessions;
+  return allSessions.filter(
+    (s) => s.userFullName.toLowerCase().includes(q) || s.userEmail.toLowerCase().includes(q)
+  );
+}
+
+function sessionStatusBadgeHtml(expiresAt: number): string {
+  const active = expiresAt > Date.now();
+  return `<span class="admin-table__badge${active ? " admin-table__badge--success" : ""}">${
+    active ? "Активна" : "Завершена"
+  }</span>`;
+}
+
+function sessionRowHtml(s: ApiAdminSession): string {
+  return `
+    <tr class="${s.token === previewSessionToken ? "admin-table__row--active" : ""}" data-row-id="${escapeHtml(s.token)}">
+      <td class="admin-table__user-cell" title="${escapeHtml(s.userFullName)}">
+        <span class="admin-table__user-name">${escapeHtml(s.userFullName)}</span>
+        <span class="admin-table__subtext">${escapeHtml(s.userEmail)}</span>
+      </td>
+      <td class="admin-table__description-cell">${formatDateTimeShort(s.createdAt)}</td>
+      <td class="admin-table__description-cell">${formatDateTimeShort(s.expiresAt)}</td>
+      <td class="admin-table__description-cell admin-table__badge-cell">${sessionStatusBadgeHtml(s.expiresAt)}</td>
+      <td class="admin-table__actions-cell">
+        <div class="admin-table__actions">
+          <button class="admin-table__preview-btn" data-preview="${escapeHtml(s.token)}" type="button" aria-label="Переглянути">
+            ${actionIconHtml("preview")}<span class="admin-table__action-label">Переглянути</span>
+          </button>
+          <button class="admin-table__delete-btn" data-delete="${escapeHtml(s.token)}" type="button" aria-label="Завершити сесію">
+            ${actionIconHtml("delete")}<span class="admin-table__action-label">Завершити</span>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+// Дати в рядках тепер у короткому форматі (formatDateTimeShort), тож
+// колонки вужчі — разом із панеллю перегляду праворуч таблиця влазить
+// у картку без горизонтального скролу (та сама причина, що й у
+// USER_TABLE_COLGROUP). Остання колонка — 2 кнопки по 36px.
+const SESSION_TABLE_COLGROUP = `
+  <colgroup>
+    <col />
+    <col style="width:120px" />
+    <col style="width:120px" />
+    <col style="width:120px" />
+    <col style="width:110px" />
+  </colgroup>`;
+
+const EMPTY_SESSIONS_HTML = `<div class="admin-categories-empty">Активних сесій ще немає.</div>`;
+
+function renderSessionPagination(filteredCount: number): void {
+  const el = document.getElementById("admin-sessions-pagination");
+  if (!el) return;
+
+  if (filteredCount === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / SESSION_PAGE_SIZE));
+  const start = (sessionPage - 1) * SESSION_PAGE_SIZE + 1;
+  const end = Math.min(sessionPage * SESSION_PAGE_SIZE, filteredCount);
+  const summary = `<p class="admin-pagination__summary">Показано ${start}–${end} з ${pluralizeRecords(filteredCount)}</p>`;
+
+  if (totalPages <= 1) {
+    el.innerHTML = summary;
+    return;
+  }
+
+  let pageButtons = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pageButtons += `<button class="admin-pagination__page${
+      p === sessionPage ? " admin-pagination__page--active" : ""
+    }" data-page="${p}" type="button">${p}</button>`;
+  }
+
+  el.innerHTML = `
+    ${summary}
+    <div class="admin-pagination__controls">
+      <button class="admin-pagination__arrow" id="admin-session-page-prev" type="button" aria-label="Попередня сторінка" ${
+        sessionPage === 1 ? "disabled" : ""
+      }>‹</button>
+      ${pageButtons}
+      <button class="admin-pagination__arrow" id="admin-session-page-next" type="button" aria-label="Наступна сторінка" ${
+        sessionPage === totalPages ? "disabled" : ""
+      }>›</button>
+    </div>`;
+
+  document.getElementById("admin-session-page-prev")?.addEventListener("click", () => {
+    if (sessionPage > 1) {
+      sessionPage--;
+      renderSessionsTableBody();
+    }
+  });
+  document.getElementById("admin-session-page-next")?.addEventListener("click", () => {
+    if (sessionPage < totalPages) {
+      sessionPage++;
+      renderSessionsTableBody();
+    }
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      sessionPage = Number(btn.dataset.page);
+      renderSessionsTableBody();
+    });
+  });
+}
+
+// Після завершення сесії — перевіряємо, чи це була саме ПОТОЧНА сесія
+// адміна (той самий httpOnly-токен, яким і зроблено цей запит):
+// getSession() ходить на /api/session, яке дивиться на сесію по кукі
+// в БД, тож якщо адмін щойно видалив чужу сесію — кука лишається
+// робочою і getSession() поверне того ж адміна; якщо ж видалив свою
+// власну (в тому числі через "Завершити" на своєму ж рядку) — кука
+// вже нікуди не веде, і саме тоді кидаємо на головну сторінку сайту.
+// Для чужої сесії просто оновлюємо список на місці.
+async function handleSessionDeleted(): Promise<void> {
+  const stillLoggedIn = await getSession();
+  if (!stillLoggedIn) {
+    window.location.href = "index.html";
+    return;
+  }
+  await loadAndRenderSessions();
+}
+
+function renderSessionPreviewPanel(): void {
+  const panel = document.getElementById("admin-session-preview");
+  if (!panel) return;
+
+  const session = allSessions.find((s) => s.token === previewSessionToken);
+  if (!session) {
+    panel.innerHTML = `<div class="admin-preview-empty">Оберіть сесію зі списку, щоб переглянути&nbsp;деталі.</div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="admin-preview__user-header">
+      <span class="admin-preview__avatar" aria-hidden="true">${escapeHtml(
+        session.userFullName.trim().charAt(0).toUpperCase() || "?"
+      )}</span>
+      <div>
+        <h2 class="admin-preview__name">${escapeHtml(session.userFullName)}</h2>
+        ${sessionStatusBadgeHtml(session.expiresAt)}
+      </div>
+    </div>
+
+    ${previewFieldHtml("email", "Email", escapeHtml(session.userEmail))}
+    ${previewFieldHtml("key", "Токен", `${escapeHtml(session.token.slice(0, 10))}…`)}
+    ${previewFieldHtml("calendar", "Створено", formatDateTime(session.createdAt))}
+    ${previewFieldHtml("clock", "Діє до", formatDateTime(session.expiresAt))}
+    ${previewFieldHtml("shield", "Статус", sessionStatusBadgeHtml(session.expiresAt))}
+    <div class="admin-preview__actions">
+      <button class="btn btn--danger" id="admin-session-preview-delete-btn" type="button">Завершити сесію</button>
+    </div>`;
+  animatePreviewPanelIn(panel);
+
+  document.getElementById("admin-session-preview-delete-btn")?.addEventListener("click", () => {
+    void (async () => {
+      const confirmed = await confirmDelete(
+        "Завершити сесію?",
+        `Сесію користувача «${session.userFullName}» буде завершено — йому доведеться увійти знову.`
+      );
+      if (!confirmed) return;
+      const result = await deleteAdminSession(session.token);
+      if (!result.ok) {
+        window.alert(result.error);
+        return;
+      }
+      previewSessionToken = null;
+      await handleSessionDeleted();
+    })();
+  });
+}
+
+function highlightActiveSessionRow(): void {
+  const wrap = document.getElementById("admin-sessions-table-wrap");
+  if (!wrap) return;
+  wrap.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.classList.toggle("admin-table__row--active", tr.dataset.rowId === previewSessionToken);
+  });
+}
+
+function renderSessionsTableBody(): void {
+  const wrap = document.getElementById("admin-sessions-table-wrap");
+  if (!wrap) return;
+
+  if (!allSessions.length) {
+    wrap.innerHTML = EMPTY_SESSIONS_HTML;
+    renderSessionPagination(0);
+    return;
+  }
+
+  const filtered = filteredSessions();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / SESSION_PAGE_SIZE));
+  if (sessionPage > totalPages) sessionPage = totalPages;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="admin-categories-empty">Нічого не знайдено за запитом «${escapeHtml(
+      sessionSearchQuery
+    )}».</div>`;
+    renderSessionPagination(0);
+    return;
+  }
+
+  const pageItems = filtered.slice((sessionPage - 1) * SESSION_PAGE_SIZE, sessionPage * SESSION_PAGE_SIZE);
+  const rowsHtml = pageItems.map(sessionRowHtml).join("");
+
+  const existingTbody = wrap.querySelector<HTMLTableSectionElement>("tbody");
+  if (existingTbody) {
+    reconcileTableRows(existingTbody, rowsHtml);
+  } else {
+    wrap.innerHTML = `
+      <table class="admin-table">
+        ${SESSION_TABLE_COLGROUP}
+        <thead>
+          <tr>
+            <th>Користувач</th>
+            <th>Створено</th>
+            <th>Діє до</th>
+            <th>Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  renderSessionPagination(filtered.length);
+}
+
+function setupSessionTableEvents(): void {
+  const wrap = document.getElementById("admin-sessions-table-wrap");
+  if (!wrap) return;
+
+  const openPreview = (token: string): void => {
+    previewSessionToken = token;
+    highlightActiveSessionRow();
+    renderSessionPreviewPanel();
+  };
+
+  wrap.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const previewBtn = target.closest<HTMLButtonElement>("[data-preview]");
+    if (previewBtn) {
+      openPreview(String(previewBtn.dataset.preview));
+      return;
+    }
+
+    const deleteBtn = target.closest<HTMLButtonElement>("[data-delete]");
+    if (deleteBtn) {
+      const token = String(deleteBtn.dataset.delete);
+      const session = allSessions.find((s) => s.token === token);
+      if (!session) return;
+
+      void (async () => {
+        const confirmed = await confirmDelete(
+          "Завершити сесію?",
+          `Сесію користувача «${session.userFullName}» буде завершено — йому доведеться увійти знову.`
+        );
+        if (!confirmed) return;
+        const result = await deleteAdminSession(token);
+        if (!result.ok) {
+          window.alert(result.error);
+          return;
+        }
+        if (previewSessionToken === token) previewSessionToken = null;
+        await handleSessionDeleted();
+      })();
+      return;
+    }
+
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      const row = target.closest<HTMLTableRowElement>("tr[data-row-id]");
+      if (row) openPreview(String(row.dataset.rowId));
+    }
+  });
+}
+
+async function loadAndRenderSessions(): Promise<void> {
+  allSessions = await getAdminSessions();
+  if (previewSessionToken !== null && !allSessions.some((s) => s.token === previewSessionToken)) {
+    previewSessionToken = null;
+  }
+  renderSessionsTableBody();
+  renderSessionPreviewPanel();
+}
+
+function setupSessionSearch(): void {
+  const input = document.getElementById("admin-session-search") as HTMLInputElement | null;
+  const clearBtn = document.getElementById("admin-session-search-clear") as HTMLButtonElement | null;
+  if (!input) return;
+
+  const syncClearBtn = (): void => {
+    clearBtn?.classList.toggle("admin-search-clear--visible", input.value.length > 0);
+  };
+
+  input.addEventListener("input", () => {
+    sessionSearchQuery = input.value;
+    sessionPage = 1;
+    syncClearBtn();
+    renderSessionsTableBody();
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    sessionSearchQuery = "";
+    sessionPage = 1;
+    syncClearBtn();
+    renderSessionsTableBody();
+    input.focus();
+  });
+
+  syncClearBtn();
+}
+
+function renderSessionsTable(): void {
+  const root = document.getElementById("admin-view");
+  if (!root) return;
+
+  sessionSearchQuery = "";
+  sessionPage = 1;
+  previewSessionToken = null;
+
+  root.innerHTML = `
+    <button class="admin-back" type="button" id="admin-back-btn">← Усі таблиці</button>
+    <h1 class="admin-page__title">Сесії</h1>
+
+    <div class="admin-categories-layout">
+      <section class="admin-section admin-section--wide">
+        <div class="admin-section__header">
+          <p class="admin-section__hint">Активні й завершені сесії користувачів — можна примусово завершити будь-яку.</p>
+        </div>
+
+        <div class="admin-table-toolbar">
+          <div class="admin-search-wrap">
+            <input type="text" id="admin-session-search" class="admin-table-search" placeholder="Пошук за користувачем або email…" autocomplete="off" />
+            <button class="admin-search-clear" id="admin-session-search-clear" type="button" aria-label="Очистити пошук">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="admin-sessions-table-wrap" class="admin-table-wrap"></div>
+        <div id="admin-sessions-pagination" class="admin-pagination"></div>
+      </section>
+
+      <section class="admin-section admin-preview" id="admin-session-preview"></section>
+    </div>`;
+
+  document.getElementById("admin-back-btn")?.addEventListener("click", () => {
+    window.location.hash = "";
+  });
+
+  setupSessionSearch();
+  setupSessionTableEvents();
+  void loadAndRenderSessions();
+}
+
 async function renderTableView(key: string): Promise<void> {
   const table = TABLES.find((t) => t.key === key);
   if (!table) {
@@ -2012,6 +2939,10 @@ async function renderTableView(key: string): Promise<void> {
     renderTagsTable();
   } else if (table.key === "user_tag_preferences") {
     renderUserPreferencesTable();
+  } else if (table.key === "users") {
+    renderUsersTable();
+  } else if (table.key === "sessions") {
+    renderSessionsTable();
   } else {
     renderStub(table.label);
   }
@@ -2093,6 +3024,7 @@ async function render(): Promise<void> {
   setupCategoryModal();
   setupTagModal();
   setupPrefModal();
+  setupUserModal();
   setupSidebar();
 
   window.addEventListener("hashchange", renderRoute);

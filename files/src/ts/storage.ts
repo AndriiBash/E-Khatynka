@@ -1,4 +1,4 @@
-import type { SessionUser, ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser } from "./types.js";
+import type { SessionUser, ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser, ApiAdminSession } from "./types.js";
 
 // ==============================
 // Клієнт до реального backend API (server.js + SQLite, /api/*).
@@ -337,7 +337,8 @@ export async function deleteUserTagPreference(id: number): Promise<DeleteResult>
   }
 }
 
-// Легкий список користувачів — для селектора у формі вподобань вище.
+// Легкий список користувачів — для селектора у формі вподобань вище, і
+// для таблиці "Користувачі" в адмінці.
 export async function getAdminUsers(): Promise<ApiAdminUser[]> {
   try {
     const res = await fetch("/api/admin/users", { credentials: "include" });
@@ -346,6 +347,75 @@ export async function getAdminUsers(): Promise<ApiAdminUser[]> {
     return data.users ?? [];
   } catch {
     return [];
+  }
+}
+
+export type AdminUserResult = { ok: true; user: ApiAdminUser } | { ok: false; error: string };
+
+// Редагування користувача адміном — лише імʼя й телефон (email = логін,
+// його зміна потребувала б підтвердження пошти; роль і пароль тут теж
+// не чіпаємо, див. коментар біля роута в server.js).
+export async function updateAdminUser(
+  id: string,
+  input: { fullName: string; phone: string }
+): Promise<AdminUserResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+
+  try {
+    return (await res.json()) as AdminUserResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function deleteAdminUser(id: string): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = (await res.json()) as DeleteResult;
+    return data;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
+// Сесії (адмінка)
+// ==============================
+
+export async function getAdminSessions(): Promise<ApiAdminSession[]> {
+  try {
+    const res = await fetch("/api/admin/sessions", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; sessions?: ApiAdminSession[] };
+    return data.sessions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminSession(token: string): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/sessions/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = (await res.json()) as DeleteResult;
+    return data;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
   }
 }
 

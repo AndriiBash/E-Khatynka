@@ -203,6 +203,23 @@
 .admin-main {
   flex: 1;
   min-width: 0;
+  /* Той самий відступ, що звичайний .site-footer бере собі через
+     margin-top (var(--space-7)) — тут навмисно продубльовано як
+     padding-bottom, а не лишено на margin футера: сайдбар (лінія
+     border-right) розтягується по висоті .admin-layout, тобто по
+     висоті найвищого з дітей — рахуючи цей паддінг. Якщо ж простір
+     лишити зовні (margin-top на футері), він випадає з .stub і лінія
+     сайдбара до нього не дотягує — саме це й було "недомальованою"
+     лінією перед підвалом. Сумарний відступ над футером той самий,
+     просто тепер він усередині. */
+  padding-bottom: var(--space-7);
+}
+
+/* Для адмінки цей самий простір вже закладений вище (.admin-main
+   padding-bottom), тож зайвий margin-top на футері прибираємо, щоб
+   не подвоювати відступ. */
+#admin-footer {
+  margin-top: 0;
 }
 
 /* ---- Бічне меню (тільки десктоп — на мобілці лишається звична
@@ -457,6 +474,12 @@
 .admin-categories-layout {
   display: flex;
   align-items: flex-start;
+  /* Коли таблиця й панель стоять поруч, обидві ростуть і вільного
+     місця в рядку не лишається — justify-content ні на що не впливає.
+     А от коли панель переноситься ПІД таблицю (див. flex-basis нижче),
+     вона лишається одна в рядку й ширша за свої 380px не стає — ось
+     тоді center і ставить її рівно посередині, під центром таблиці, а
+     не притисненою до лівого краю. */
   justify-content: center;
   gap: var(--space-4);
   max-width: 1400px;
@@ -464,8 +487,21 @@
   flex-wrap: wrap;
 }
 
+/* flex-basis навмисно великий (720px) — це приблизна МІНІМАЛЬНА
+   ширина, за якої таблиця з 5 колонками ще читається. Поки поруч
+   влазить і панель перегляду (720 + 300 + gap ≈ 1040px вільного
+   місця — десктоп від ~1300px), вони стоять пліч-о-пліч; щойно місця
+   менше — панель переноситься ПІД таблицю, і таблиця забирає всю
+   ширину.
+   Раніше basis був 560px: панель лишалась поруч навіть на ~1200px,
+   таблиця стискалась вужче за суму своїх колонок і йшла в
+   горизонтальний скрол. А оскільки браузер при кліку на кнопку в
+   рядку підкручує скрол до цієї кнопки, перша колонка
+   ("Користувач") просто зникала ліворуч, а остання кнопка лишалась
+   підрізаною праворуч — той самий баг, що було видно на
+   "Користувачах" і "Сесіях". */
 .admin-section--wide {
-  flex: 1 1 560px;
+  flex: 1 1 720px;
   /* .admin-section обмежує все до 640px — тут таблиці явно тісно,
      тож розширюємо саме "широку" секцію. */
   max-width: 960px;
@@ -539,13 +575,97 @@
   font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--color-text-muted);
-  margin-bottom: var(--space-1);
+  /* Було var(--space-1) (4px) — з урахуванням line-height обох рядків
+     проміжок між підписом і значенням виглядав більшим, ніж хотілося б
+     (особливо помітно на "Email" / "admin@ehatynka.local" в картці
+     користувача). line-height тут звужено так само, щоб не лишати
+     зайвого простору над самим підписом. */
+  line-height: 1.2;
+  margin-bottom: 2px;
 }
 
 .admin-preview__field-value {
   margin: 0;
   font-size: var(--fs-sm);
+  line-height: 1.3;
   overflow-wrap: break-word;
+}
+
+/* ---- Картка користувача (аватар + іконки-рядки) ---- */
+
+.admin-preview__user-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.admin-preview__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-accent-dark);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.admin-preview__field--icon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-preview__field-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+}
+
+.admin-preview__field-icon-glyph {
+  display: block;
+  width: 18px;
+  height: 18px;
+  background-color: var(--color-text-muted);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.admin-preview__field-text {
+  min-width: 0;
+  flex: 1;
+}
+
+/* Відстань МІЖ рядками картки (email/телефон/дата тощо) — без цього
+   сусідні .admin-preview__field ліпились впритул одне до одного,
+   особливо помітно було в картці користувача з кількома іконками
+   поспіль. Останньому полю перед розділювачем/кнопками зайвий відступ
+   знизу не потрібен — margin згортається із сусіднім margin-top того,
+   що йде далі (звичайний блочний потік, без flex/grid на батьку), тож
+   подвійного відступу не буде. */
+.admin-preview__field {
+  margin-bottom: var(--space-4);
+}
+
+.admin-preview__section-title {
+  margin: var(--space-5) 0 var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--fs-sm);
+  font-weight: 700;
 }
 
 .admin-preview__actions {
@@ -855,6 +975,14 @@
   color: var(--color-text-muted);
   padding: 0 var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--color-border);
+  /* Без цього довгий заголовок ("Користувач" тощо) в затиснутій
+     колонці на вузькому екрані не переносився й не обрізався, а просто
+     малювався поверх сусідньої клітинки — виглядало як склеєні докупи
+     літери двох заголовків. Тепер, як і в звичайних td, він акуратно
+     ховається за "...". */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-table td {
@@ -951,12 +1079,49 @@
   white-space: nowrap;
 }
 
+/* Невеликий бейдж у клітинці таблиці — роль користувача, статус сесії
+   тощо. За замовчуванням нейтральний (сірий), --accent — для
+   "позитивного"/виділеного стану (Адміністратор, Активна). */
+.admin-table__badge {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.admin-table__badge--accent {
+  background: var(--color-surface-muted);
+  color: var(--color-accent-dark);
+}
+
+.admin-table__badge--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
 .admin-table__description-cell {
   color: var(--color-text-muted);
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Клітинка з бейджем (роль користувача, статус сесії) — на відміну
+   від звичайного тексту, бейдж НЕ можна обрізати трьома крапками:
+   заокруглена «пігулка» просто зникала за overflow:hidden від
+   .admin-table__description-cell, коли текст усередині ("Адміністратор")
+   не влазив у max-width:110px. Тут навпаки — прибираємо max-width й
+   overflow, а ширину під бейдж задаємо явно в colgroup конкретної
+   таблиці (див. USER_TABLE_COLGROUP / SESSION_TABLE_COLGROUP). */
+.admin-table__badge-cell {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* Квадратні заокруглені кнопки з іконкою замість тексту — і на
@@ -1079,20 +1244,27 @@
 }
 
 /* Той самий запобіжник, що й нижче для телефону, але для планшетів
-   (iPad 11" в портреті/альбомі — 834–1194px — раніше сюди не влучав
-   жоден з двох брейкпоінтів: <640px і >=901px, тож на цій ширині
-   таблиця могла вилізти за межі картки й "виштовхнути" кнопки дій).
+   (iPad 11" в портреті/альбомі — 834–1194px). Брейкпоінт піднято до
+   1200px (раніше був 1024px і не покривав ландшафтну орієнтацію
+   11" iPad, чия ширина 1194px — саме там таблиця й вилазила за межі
+   картки, хоч коментар нижче обіцяв покриття "834–1194px").
    Навіть якщо стовпці десь не влізуть тютелька в тютельку — тепер
    таблиця просто скролиться в себе, а не ламає layout навколо.
-   Той самий клас на всіх трьох wrap-ах (категорії/теги/вподобання) —
-   при додаванні четвертої таблиці з колонками досить лише навісити
-   .admin-table-wrap, а не пригадувати цей блок і дописувати ще один id. */
-@media (max-width: 1024px) {
-  .admin-table-wrap {
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+   Той самий клас на всіх wrap-ах (категорії/теги/вподобання/
+   користувачі/сесії) — при додаванні нової таблиці з колонками
+   досить лише навісити .admin-table-wrap, а не пригадувати цей блок
+   і дописувати ще один id. */
+/* Страхувальна сітка на будь-якій ширині, а не лише на планшетах:
+   якщо колонки десь усе-таки не влізуть (довге імʼя, інша локаль,
+   збільшений шрифт у системі) — таблиця скролиться всередині себе, а
+   не ламає картку навколо. Основне ж рішення тепер вище, у
+   .admin-section--wide: панель перегляду переноситься під таблицю
+   раніше, ніж таблиці стане тісно, тож у звичайних умовах скролити
+   тут уже нема чого. */
+.admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 640px) {

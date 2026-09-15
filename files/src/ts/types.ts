@@ -37,5 +37,18 @@ export interface ApiAdminUser {
   id: string;
   fullName: string;
   email: string;
+  phone: string;
   role: string;
+  createdAt: number;
+  orderCount: number;
+  totalSpent: number;
+}
+
+export interface ApiAdminSession {
+  token: string;
+  userId: string;
+  userFullName: string;
+  userEmail: string;
+  createdAt: number;
+  expiresAt: number;
 }

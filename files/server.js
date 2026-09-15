@@ -917,15 +917,142 @@ app.post("/api/me/tag-preferences", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Легкий список користувачів — лише для селектора у формі вподобань
-// вище (id + імʼя для відображення), без чутливих полів на кшталт
-// password_hash.
+// Список користувачів для адмінки — і для таблиці "Користувачі", і для
+// селектора у формі вподобань вище. Без password_hash. orderCount і
+// totalSpent — агрегати по orders (усі статуси, свого поля
+// "скасовано" в схемі поки нема) для картки перегляду користувача.
 app.get("/api/admin/users", requireAdmin, (req, res) => {
-  const rows = db.prepare("SELECT id, full_name, email, role FROM users ORDER BY full_name ASC").all();
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.created_at,
+              COUNT(o.id) AS order_count, COALESCE(SUM(o.total_amount), 0) AS total_spent
+       FROM users u
+       LEFT JOIN orders o ON o.user_id = u.id
+       GROUP BY u.id
+       ORDER BY u.full_name ASC`
+    )
+    .all();
   res.json({
     ok: true,
-    users: rows.map((r) => ({ id: r.id, fullName: r.full_name, email: r.email, role: r.role })),
+    users: rows.map((r) => ({
+      id: r.id,
+      fullName: r.full_name,
+      email: r.email,
+      phone: r.phone,
+      role: r.role,
+      createdAt: r.created_at,
+      orderCount: r.order_count,
+      totalSpent: r.total_spent,
+    })),
   });
+});
+
+// Редагування користувача з адмінки — навмисно лише імʼя й телефон.
+// Email не чіпаємо: він слугує логіном (і вже має UNIQUE-обмеження),
+// тож його зміна — це окрема історія з підтвердженням пошти, а не
+// просто поле у формі. Роль/пароль тут теж не міняємо.
+app.put("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { fullName, phone } = req.body || {};
+
+  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
+  if (!user) return res.status(404).json({ ok: false, error: "Користувача не знайдено" });
+
+  if (typeof fullName !== "string" || fullName.trim().length < 2) {
+    return res.json({ ok: false, error: "Введіть ім'я та прізвище" });
+  }
+  if (typeof phone !== "string" || !PHONE_RE.test(phone.replace(/[\s()-]/g, ""))) {
+    return res.json({ ok: false, error: "Введіть коректний номер телефону" });
+  }
+
+  db.prepare("UPDATE users SET full_name = ?, phone = ? WHERE id = ?").run(
+    fullName.trim(),
+    phone.trim(),
+    id
+  );
+
+  const row = db
+    .prepare(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.created_at,
+              COUNT(o.id) AS order_count, COALESCE(SUM(o.total_amount), 0) AS total_spent
+       FROM users u
+       LEFT JOIN orders o ON o.user_id = u.id
+       WHERE u.id = ?
+       GROUP BY u.id`
+    )
+    .get(id);
+
+  res.json({
+    ok: true,
+    user: {
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      phone: row.phone,
+      role: row.role,
+      createdAt: row.created_at,
+      orderCount: row.order_count,
+      totalSpent: row.total_spent,
+    },
+  });
+});
+
+// Видалення користувача — власний рахунок видалити не можна (щоб адмін
+// сам собі не перекрив доступ), і якщо є повʼязані записи (замовлення,
+// кошики тощо — FK без ON DELETE CASCADE), видалення відхиляється з
+// зрозумілою причиною замість падіння в 500.
+app.delete("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  if (id === req.adminUser.id) {
+    return res.status(400).json({ ok: false, error: "Не можна видалити самого себе" });
+  }
+  const user = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
+  if (!user) return res.status(404).json({ ok: false, error: "Користувача не знайдено" });
+
+  try {
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
+    db.prepare("DELETE FROM users WHERE id = ?").run(id);
+  } catch {
+    return res.status(400).json({
+      ok: false,
+      error: "Не можна видалити — є повʼязані записи (замовлення, кошики тощо).",
+    });
+  }
+  res.json({ ok: true });
+});
+
+// ==============================
+// Сесії (адмінка) — список + примусове завершення (revoke).
+// ==============================
+
+app.get("/api/admin/sessions", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT s.token, s.user_id, s.created_at, s.expires_at, u.full_name, u.email
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       ORDER BY s.created_at DESC`
+    )
+    .all();
+  res.json({
+    ok: true,
+    sessions: rows.map((r) => ({
+      token: r.token,
+      userId: r.user_id,
+      userFullName: r.full_name,
+      userEmail: r.email,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    })),
+  });
+});
+
+app.delete("/api/admin/sessions/:token", requireAdmin, (req, res) => {
+  const { token } = req.params;
+  const existing = db.prepare("SELECT token FROM sessions WHERE token = ?").get(token);
+  if (!existing) return res.status(404).json({ ok: false, error: "Сесію не знайдено" });
+  db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+  res.json({ ok: true });
 });
 
 // ==============================
