@@ -126,6 +126,7 @@
 .field input[type="email"],
 .field input[type="tel"],
 .field input[type="password"],
+.field input[type="number"],
 .field select {
   width: 100%;
   height: 46px;
@@ -138,8 +139,27 @@
   color: var(--color-text);
 }
 
+.field textarea {
+  width: 100%;
+  min-height: 80px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  /* Раніше textarea не мала власного правила й успадковувала
+     системний шрифт браузера (менший і в іншій гарнітурі за решту
+     полів форми) — тепер так само, як .field input. */
+  font-size: var(--fs-base);
+  color: var(--color-text);
+  /* Юзер сам не має розтягувати поле опису мишкою — висота лишається
+     тим, що задано в розмітці (rows="2" + min-height тут). */
+  resize: none;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--color-accent);
 }
 
@@ -173,6 +193,245 @@
   margin: 0;
   flex-shrink: 0;
   accent-color: var(--color-accent);
+}
+
+/* ---- Тайли вибору способу оплати (попап "Способи оплати", user-menu.ts) ----
+   Той самий принцип, що вибір категорії/тегу деінде в адмінці: клікабельні
+   картки замість <select>, з підсвіченим активним станом. */
+.payment-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.payment-type-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 76px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+  padding: var(--space-2);
+  cursor: pointer;
+}
+
+.payment-type-option__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.payment-type-option:hover {
+  border-color: var(--color-accent);
+}
+
+.payment-type-option--active {
+  border-color: var(--color-accent);
+  background: var(--color-surface-muted);
+  color: var(--color-accent-dark);
+}
+
+.payment-type-option--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.payment-type-option__icon {
+  width: 26px;
+  height: 26px;
+  background-color: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.payment-type-option__icon--card {
+  mask-image: url(../../assets/icons/payment-type-card.png);
+  -webkit-mask-image: url(../../assets/icons/payment-type-card.png);
+}
+
+.payment-type-option__icon--mobile {
+  mask-image: url(../../assets/icons/payment-type-mobile.png);
+  -webkit-mask-image: url(../../assets/icons/payment-type-mobile.png);
+}
+
+.payment-type-option__icon--wallet {
+  mask-image: url(../../assets/icons/payment-type-wallet.png);
+  -webkit-mask-image: url(../../assets/icons/payment-type-wallet.png);
+}
+
+.payment-type-option__icon--cash {
+  mask-image: url(../../assets/icons/payment-type-cash.png);
+  -webkit-mask-image: url(../../assets/icons/payment-type-cash.png);
+}
+
+/* ---- Список уже доданих способів оплати (над формою в тому самому попапі) ---- */
+.my-payment-methods {
+  margin-bottom: var(--space-4);
+}
+
+.my-payment-methods__title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+
+.my-payment-methods__empty {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.my-payment-methods__list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.my-payment-methods__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.my-payment-methods__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background-color: var(--color-text-muted);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.my-payment-methods__label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-payment-methods__badge {
+  flex-shrink: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-accent-dark);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-pill, 999px);
+  padding: 2px 8px;
+}
+
+.my-payment-methods__remove {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.my-payment-methods__remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.my-payment-methods__remove:hover {
+  color: var(--color-error);
+}
+
+/* "Список бажаного" (user-menu.ts) перевикористовує .my-payment-methods__*
+   розмітку рядка (той самий стиль списку-попапу), додає лише емодзі
+   товару зліва й ціну праворуч — назва сама стає посиланням на
+   сторінку товару. */
+.my-wishlist-item__emoji {
+  flex-shrink: 0;
+  font-size: 20px;
+  line-height: 1;
+  width: 20px;
+  text-align: center;
+}
+
+/* Реальне фото товару (imageUrl з адмінки) замість емодзі-заглушки,
+   коли воно є — той самий розмір слоту, щоб рядки списку не
+   "стрибали" залежно від того, в якого товару є фото. */
+.my-wishlist-item__photo {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.my-wishlist-item__name {
+  color: inherit;
+  text-decoration: none;
+}
+
+.my-wishlist-item__name:hover {
+  text-decoration: underline;
+}
+
+.my-wishlist-item__price {
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.my-payment-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.my-payment-back:hover {
+  color: var(--color-text);
+}
+
+.my-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.my-confirm-actions .btn {
+  flex: 1;
 }
 
 .btn--primary {

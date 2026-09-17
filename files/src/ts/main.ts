@@ -1,4 +1,5 @@
 import { getSession, logout } from "./storage.js";
+import { resetFavoritesCache } from "./favorites.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
 import { setupCatalog, setSearchQuery } from "./catalog.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
@@ -38,7 +39,6 @@ function setupMobileSearch(): void {
   const wrap = document.getElementById("mobile-search");
   const toggle = document.getElementById("mobile-search-toggle");
   const input = document.getElementById("mobile-search-input") as HTMLInputElement | null;
-  const aiBtn = document.getElementById("mobile-search-ai");
   const clearTextBtn = document.getElementById("mobile-search-clear");
   if (!wrap || !toggle || !input) return;
 
@@ -241,10 +241,6 @@ function setupMobileSearch(): void {
     }
   });
 
-  aiBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
   document.addEventListener("click", (e) => {
     if (isOpen() && !wrap.contains(e.target as Node)) close();
   });
@@ -368,6 +364,7 @@ async function render(): Promise<void> {
       // затримку.
       void (async () => {
         await logout();
+        resetFavoritesCache();
         await render();
       })();
     });

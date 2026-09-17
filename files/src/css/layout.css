@@ -188,6 +188,12 @@
   line-height: 1;
 }
 
+.product-card__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .product-card__info {
   padding: var(--space-3) var(--space-3) var(--space-4);
 }
@@ -197,6 +203,44 @@
   font-weight: 700;
   color: var(--color-accent-dark);
   margin-bottom: var(--space-1);
+}
+
+/* Знижка — бейдж поверх фото + стара/нова ціна поряд, той самий
+   принцип "закреслена стара, жирна нова", що на референсах маркетів. */
+.product-card__badge {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  background: var(--color-error);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.product-card__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.product-card__price--sale {
+  margin-bottom: 0;
+  color: var(--color-error);
+}
+
+.product-card__price-old {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  /* Сама лінія закреслення — червона (та ж семантика, що знижка), а
+     колір тексту лишається приглушеним сірим — так контраст між
+     "стара/нова" ціна читається краще, ніж суцільно червоний текст. */
+  text-decoration-color: var(--color-error);
+  text-decoration-thickness: 1.5px;
 }
 
 .product-card__name {

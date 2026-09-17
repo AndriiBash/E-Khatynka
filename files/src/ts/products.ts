@@ -1,161 +1,103 @@
 // ==============================
-// Мок-дані каталогу. Пізніше замінюються на реальні запити до backend
-// (той самий сервер, що вже роздає /api/register тощо, отримає ще й
-// /api/products) — тут просто заглушка, щоб було на чому показати
-// макет (категорії зліва, товари по центру, кошик справа) і сторінку
-// товару (product.html).
+// Товари тепер реально живуть у БД (таблиця products, керується з
+// admin.html) — той самий підхід, що вже застосований до категорій
+// (getCategories() в storage.ts/catalog.ts). PRODUCTS лишається
+// експортованим МАСИВОМ (не проміс, не функція), щоб решта коду
+// (catalog.ts/product-page.ts/user-menu.ts) не переписувалась —
+// loadProducts() просто наповнює цей самий масив на місці (.splice, а
+// не переприсвоєння), тож усі наявні PRODUCTS.find(...)/.filter(...)
+// продовжують працювати як і раніше, щойно виклик loadProducts()
+// зроблено й дочекано хоч один раз.
 // ==============================
 
 export interface Product {
   id: string;
   name: string;
   price: number;
+  originalPrice: number;
+  discountPercent: number;
   category: string;
   emoji: string;
+  imageUrl: string | null;
   weight: string;
   description: string;
   shelfLife: string;
   manufacturer: string;
 }
 
-// Категорії тепер живуть у БД (таблиця categories, /api/categories) —
-// дивись storage.ts/catalog.ts. products.category тут лишається
-// рядком-заглушкою (bread/pastry/...) для фільтрації МОК-товарів
-// нижче — поки самі товари не переїхали в БД, реальні id категорій з
-// бекенду з ними не зв'яжуться (тож клік по щойно доданій в адмінці
-// категорії покаже порожній список — це очікувано, а не баг).
+interface ApiPublicProduct {
+  id: number;
+  categoryId: number;
+  name: string;
+  description: string | null;
+  weight: string | null;
+  shelfLifeDays: number | null;
+  storageConditions: string | null;
+  price: number;
+  originalPrice: number;
+  discountPercent: number;
+  imageUrl: string | null;
+  stockQuantity: number;
+  tagIds: number[];
+}
 
-export const PRODUCTS: Product[] = [
-  {
-    id: "p1",
-    name: "Хліб пшеничний",
-    price: 35,
-    category: "bread",
-    emoji: "🍞",
-    weight: "500 г",
-    description: "Класичний білий хліб на заквасці, випікається щоранку — хрустка скоринка й м'який м'якуш.",
-    shelfLife: "3 доби, у сухому місці при +18…+22°C",
+// Немає власної іконки/фото в адмінці — товар все одно має щось
+// показати на картці замість порожнього прямокутника.
+const FALLBACK_EMOJI = "🍞";
+
+function shelfLifeText(p: ApiPublicProduct): string {
+  const parts: string[] = [];
+  if (p.shelfLifeDays !== null) {
+    parts.push(`${p.shelfLifeDays} дн.`);
+  }
+  if (p.storageConditions) {
+    parts.push(p.storageConditions);
+  }
+  return parts.length ? parts.join(", ") : "Термін придатності уточнюйте у продавця";
+}
+
+function mapApiProduct(p: ApiPublicProduct): Product {
+  return {
+    id: String(p.id),
+    name: p.name,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    discountPercent: p.discountPercent,
+    // String(categoryId) — той самий формат, що catalog.ts використовує
+    // для activeCategory (порівнює з String(c.id) з /api/categories),
+    // тож фільтр за категорією працює без додаткових перетворень.
+    category: String(p.categoryId),
+    emoji: FALLBACK_EMOJI,
+    imageUrl: p.imageUrl,
+    weight: p.weight ?? "",
+    description: p.description ?? "",
+    shelfLife: shelfLifeText(p),
     manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p2",
-    name: "Хліб житній",
-    price: 38,
-    category: "bread",
-    emoji: "🍞",
-    weight: "500 г",
-    description: "Насичений житній хліб з легкою кислинкою — чудово тримає форму для бутербродів.",
-    shelfLife: "4 доби, у сухому місці при +18…+22°C",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p3",
-    name: "Багет французький",
-    price: 42,
-    category: "bread",
-    emoji: "🥖",
-    weight: "250 г",
-    description: "Хрумка скоринка й повітряний м'якуш — випікаємо кілька разів на день, щоб завжди був теплий.",
-    shelfLife: "1 доба, у паперовому пакеті",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p4",
-    name: "Круасан вершковий",
-    price: 45,
-    category: "pastry",
-    emoji: "🥐",
-    weight: "80 г",
-    description: "Багатошаровий круасан на вершковому маслі — злегка хрусткий зовні, ніжний всередині.",
-    shelfLife: "2 доби, у сухому місці",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p5",
-    name: "Булочка з корицею",
-    price: 40,
-    category: "pastry",
-    emoji: "🥯",
-    weight: "90 г",
-    description: "М'яка здобна булочка з корицею й легкою цукровою глазур'ю зверху.",
-    shelfLife: "2 доби, у сухому місці",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p6",
-    name: "Пиріжок з вишнею",
-    price: 32,
-    category: "pastry",
-    emoji: "🥟",
-    weight: "100 г",
-    description: "Смажений пиріжок з начинкою з вишні — класика, яку любили ще наші бабусі.",
-    shelfLife: "1 доба, у сухому місці",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p7",
-    name: "Торт Наполеон",
-    price: 320,
-    category: "cakes",
-    emoji: "🍰",
-    weight: "800 г",
-    description: "Багатошаровий торт з хрустким тістом і ніжним заварним кремом — готуємо за класичним рецептом.",
-    shelfLife: "3 доби, в холодильнику при +2…+6°C",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p8",
-    name: "Чізкейк",
-    price: 280,
-    category: "cakes",
-    emoji: "🍮",
-    weight: "700 г",
-    description: "Ніжний запечений чізкейк на пісочній основі — з легкою карамельною ноткою зверху.",
-    shelfLife: "4 доби, в холодильнику при +2…+6°C",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p9",
-    name: "Медовик",
-    price: 260,
-    category: "cakes",
-    emoji: "🎂",
-    weight: "750 г",
-    description: "Медові коржі просочені сметанним кремом — тане в роті, як і має бути в справжньому медовику.",
-    shelfLife: "3 доби, в холодильнику при +2…+6°C",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p10",
-    name: "Кава американо",
-    price: 55,
-    category: "drinks",
-    emoji: "☕",
-    weight: "300 мл",
-    description: "Класичний американо зі свіжообсмажених зерен — готуємо на замовлення, кожна чашка свіжа.",
-    shelfLife: "Готується на місці, вживати одразу",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p11",
-    name: "Капучино",
-    price: 65,
-    category: "drinks",
-    emoji: "☕",
-    weight: "300 мл",
-    description: "Еспресо з ніжною молочною пінкою — збалансований смак без зайвої гіркоти.",
-    shelfLife: "Готується на місці, вживати одразу",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-  {
-    id: "p12",
-    name: "Морс ягідний",
-    price: 45,
-    category: "drinks",
-    emoji: "🧃",
-    weight: "400 мл",
-    description: "Домашній морс із суміші лісових ягід — без консервантів і зайвого цукру.",
-    shelfLife: "2 доби, в холодильнику при +2…+6°C",
-    manufacturer: "Є-Хатинка, Україна",
-  },
-];
+  };
+}
+
+export const PRODUCTS: Product[] = [];
+
+let loadPromise: Promise<void> | null = null;
+
+// Викликається (і чекається) на вході catalog.ts/product-page.ts/
+// user-menu.ts (список бажаного) — повторні виклики повертають той
+// самий проміс, що вже в польоті чи вже завершився, тож саме
+// завантаження відбувається один раз за сесію сторінки.
+export function loadProducts(): Promise<void> {
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      try {
+        const res = await fetch("/api/products");
+        if (!res.ok) return;
+        const data = (await res.json()) as { products?: ApiPublicProduct[] };
+        const items = (data.products ?? []).map(mapApiProduct);
+        PRODUCTS.splice(0, PRODUCTS.length, ...items);
+      } catch {
+        // Мовчки лишаємо PRODUCTS порожнім — рендер просто покаже
+        // порожній каталог замість падіння сторінки.
+      }
+    })();
+  }
+  return loadPromise;
+}

@@ -1,4 +1,19 @@
-import type { SessionUser, ApiCategory, ApiTag, ApiUserTagPreference, ApiAdminUser, ApiAdminSession } from "./types.js";
+import type {
+  SessionUser,
+  ApiCategory,
+  ApiTag,
+  ApiUserTagPreference,
+  ApiAdminUser,
+  ApiAdminSession,
+  ApiIngredient,
+  ApiAdminPaymentMethod,
+  ApiProduct,
+  ApiAdminWishlistItem,
+  ApiAdminCart,
+  ApiAdminCartItem,
+  ApiAdminProductRecipeItem,
+  ApiAdminProductTagItem,
+} from "./types.js";
 
 // ==============================
 // Клієнт до реального backend API (server.js + SQLite, /api/*).
@@ -162,7 +177,10 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-export async function uploadIcon(file: File, kind: "categories" | "tags"): Promise<UploadIconResult> {
+export async function uploadIcon(
+  file: File,
+  kind: "categories" | "tags" | "ingredients" | "products"
+): Promise<UploadIconResult> {
   let dataBase64: string;
   try {
     dataBase64 = await readFileAsBase64(file);
@@ -191,6 +209,10 @@ export async function uploadIcon(file: File, kind: "categories" | "tags"): Promi
 
 export async function uploadCategoryIcon(file: File): Promise<UploadIconResult> {
   return uploadIcon(file, "categories");
+}
+
+export async function uploadIngredientIcon(file: File): Promise<UploadIconResult> {
+  return uploadIcon(file, "ingredients");
 }
 
 // ==============================
@@ -453,6 +475,164 @@ export async function setMyTagPreference(tagId: number, enabled: boolean): Promi
 }
 
 // ==============================
+// Інгредієнти (склад) — повний CRUD, той самий підхід, що й у
+// категорій/тегів.
+// ==============================
+
+export async function getIngredients(): Promise<ApiIngredient[]> {
+  try {
+    const res = await fetch("/api/admin/ingredients", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; ingredients?: ApiIngredient[] };
+    return data.ingredients ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type IngredientResult = { ok: true; ingredient: ApiIngredient } | { ok: false; error: string };
+
+export interface IngredientInput {
+  name: string;
+  unit: string;
+  stockQuantity: number;
+  lowStockThreshold: number | null;
+  iconUrl: string;
+}
+
+export async function createIngredient(input: IngredientInput): Promise<IngredientResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/admin/ingredients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as IngredientResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function updateIngredient(id: number, input: IngredientInput): Promise<IngredientResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/ingredients/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as IngredientResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function deleteIngredient(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/ingredients/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
+// Способи оплати. Адмінська сторона — лише перегляд + видалення (див.
+// коментар біля роутів у server.js: створює й редагує СВІЙ спосіб
+// оплати тільки сам покупець, з попапу в шапці сайту).
+// ==============================
+
+export async function getAdminPaymentMethods(): Promise<ApiAdminPaymentMethod[]> {
+  try {
+    const res = await fetch("/api/admin/payment-methods", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; paymentMethods?: ApiAdminPaymentMethod[] };
+    return data.paymentMethods ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminPaymentMethod(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/payment-methods/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export interface MyPaymentMethod {
+  id: number;
+  type: string;
+  label: string | null;
+  isDefault: boolean;
+  createdAt: number;
+}
+
+export async function getMyPaymentMethods(): Promise<MyPaymentMethod[]> {
+  try {
+    const res = await fetch("/api/me/payment-methods", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; paymentMethods?: MyPaymentMethod[] };
+    return data.paymentMethods ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteMyPaymentMethod(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/me/payment-methods/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export interface MyPaymentMethodInput {
+  type: "card" | "apple_pay" | "google_pay" | "cash";
+  cardDigits?: string;
+  customLabel?: string;
+  isDefault: boolean;
+}
+
+export type MyPaymentMethodResult = { ok: true; paymentMethod: MyPaymentMethod } | { ok: false; error: string };
+
+export async function addMyPaymentMethod(input: MyPaymentMethodInput): Promise<MyPaymentMethodResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/me/payment-methods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as MyPaymentMethodResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
 // Панель адміна: кількість записів у кожній таблиці (для плиток на
 // головній admin.html).
 // ==============================
@@ -478,5 +658,193 @@ export async function getTableCounts(): Promise<AdminTableCounts | null> {
     return { counts: data.counts, lastUpdated: data.lastUpdated ?? {} };
   } catch {
     return null;
+  }
+}
+
+// ==============================
+// Продукти — повний CRUD, той самий підхід, що й у інгредієнтів. Рецепт
+// і теги — частина того самого об'єкта (recipes[]/tagIds[]), сервер
+// переписує обидва списки цілком на кожен POST/PUT (дивись коментар
+// біля replaceProductRecipes/replaceProductTags в server.js).
+// ==============================
+
+export async function getProducts(): Promise<ApiProduct[]> {
+  try {
+    const res = await fetch("/api/admin/products", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; products?: ApiProduct[] };
+    return data.products ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type ProductResult = { ok: true; product: ApiProduct } | { ok: false; error: string };
+
+export interface ProductRecipeInput {
+  ingredientId: number;
+  quantity: number;
+}
+
+export interface ProductInput {
+  categoryId: number;
+  name: string;
+  description: string;
+  weight: string;
+  shelfLifeDays: number | null;
+  storageConditions: string;
+  calories: number | null;
+  proteins: number | null;
+  fats: number | null;
+  carbohydrates: number | null;
+  price: number;
+  discountPercent: number;
+  imageUrl: string;
+  stockQuantity: number;
+  recipes: ProductRecipeInput[];
+  tagIds: number[];
+}
+
+export async function createProduct(input: ProductInput): Promise<ProductResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/admin/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as ProductResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function updateProduct(id: number, input: ProductInput): Promise<ProductResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/products/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as ProductResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function deleteProduct(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function uploadProductIcon(file: File): Promise<UploadIconResult> {
+  return uploadIcon(file, "products");
+}
+
+// ==============================
+// Списки бажаного/кошики/предмети кошика — лише перегляд + видалення в
+// адмінці (наповнює сам покупець на сайті, не адмін).
+// ==============================
+
+export async function getAdminWishlistItems(): Promise<ApiAdminWishlistItem[]> {
+  try {
+    const res = await fetch("/api/admin/wishlists", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; wishlistItems?: ApiAdminWishlistItem[] };
+    return data.wishlistItems ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminWishlistItem(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/wishlists/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function getAdminCarts(): Promise<ApiAdminCart[]> {
+  try {
+    const res = await fetch("/api/admin/carts", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; carts?: ApiAdminCart[] };
+    return data.carts ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminCart(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/carts/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function getAdminCartItems(): Promise<ApiAdminCartItem[]> {
+  try {
+    const res = await fetch("/api/admin/cart-items", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; cartItems?: ApiAdminCartItem[] };
+    return data.cartItems ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminCartItem(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/cart-items/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
+// Рецепти й теги продуктів — read-only списки по всій БД одразу (для
+// адмінських таблиць "Рецепти продуктів"/"Теги продуктів"). Видалення
+// звідси немає — редагується лише через сам продукт.
+// ==============================
+
+export async function getAdminProductRecipes(): Promise<ApiAdminProductRecipeItem[]> {
+  try {
+    const res = await fetch("/api/admin/product-recipes", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; productRecipes?: ApiAdminProductRecipeItem[] };
+    return data.productRecipes ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getAdminProductTags(): Promise<ApiAdminProductTagItem[]> {
+  try {
+    const res = await fetch("/api/admin/product-tags", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; productTags?: ApiAdminProductTagItem[] };
+    return data.productTags ?? [];
+  } catch {
+    return [];
   }
 }

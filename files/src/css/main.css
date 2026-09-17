@@ -90,8 +90,7 @@
   position: absolute;
   right: var(--space-2);
   top: 50%;
-  transform: translateY(-50%);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -101,6 +100,16 @@
   background: none;
   padding: 0;
   color: var(--color-text-muted);
+  /* Раніше видимість перемикалась через display:none/flex — властивість
+     не анімується, тож кнопка просто "телепортувалась". Тепер вона
+     завжди в потоці (opacity:0 + pointer-events:none, коли поле
+     порожнє), і з'являється плавним "спливанням" з переходу з
+     translateY(-50%) — той самий трюк центрування по вертикалі, що й
+     був, просто доданий у той самий transform, що й scale. */
+  opacity: 0;
+  transform: translateY(-50%) scale(0.6);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .stub__search-clear svg {
@@ -116,55 +125,9 @@
 }
 
 .stub__search input:not(:placeholder-shown) ~ .stub__search-clear {
-  display: flex;
-}
-
-.stub__ai-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
-  height: 44px;
-  padding: 0 var(--space-4);
-  border: none;
-  /* Узгоджено з "Увійти"/"Оформити" — те саме скруглення для будь-якого
-     стану, включно з hover (там міняється лише фон, не форма). */
-  border-radius: var(--radius-sm);
-  background: #4A3B7C;
-  color: #fff;
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  animation: ai-glow-pulse 2.4s ease-in-out infinite;
-}
-
-.stub__ai-search svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .stub__ai-search:hover {
-    background: #392e63;
-  }
-}
-
-/* Різнокольорове "ІІ-свічення" навколо кнопок ШІ-пошуку — сигналізує,
-   що це саме ШІ-функція, а не звичайна кнопка. Сам колір кнопки (фіолетовий,
-   див. вище) вже трохи натякає на це, тож світіння можна лишити помітним.
-   Working на десктопі й у мобільному розкритому пошуку. */
-@keyframes ai-glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 14px 2px rgba(124, 92, 255, 0.45),
-      0 0 26px 6px rgba(255, 111, 216, 0.3), 0 0 36px 10px rgba(52, 209, 232, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 18px 3px rgba(124, 92, 255, 0.6),
-      0 0 32px 8px rgba(255, 111, 216, 0.4), 0 0 44px 14px rgba(52, 209, 232, 0.28);
-  }
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+  pointer-events: auto;
 }
 
 .stub__topbar-spacer {
@@ -1052,6 +1015,24 @@
   white-space: nowrap;
 }
 
+/* Для інгредієнтів навпаки — назва мала лишатись повною, а ховатись
+   (за потреби) мав саме залишок: max-width тут прибираємо, ellipsis
+   тепер спрацює лише якщо назва справді не влазить у колонку (а
+   колонка — гумова, "col" без ширини в INGREDIENT_TABLE_COLGROUP —
+   тож на практиці для типових назв ("Борошно пшеничне") цього майже
+   ніколи не станеться). */
+.admin-table__name-cell--flex {
+  max-width: none;
+}
+
+.admin-table__stock-cell {
+  color: var(--color-text-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Клітинка з двома рядками (імʼя + email) у "Вподобаннях
    користувачів" — на відміну від .admin-table__name-cell, тут навмисно
    НЕ nowrap: email під іменем має право переноситись власним рядком,
@@ -1101,6 +1082,14 @@
 .admin-table__badge--success {
   background: var(--color-success-bg);
   color: var(--color-success);
+}
+
+/* "Мало на складі" — інгредієнт, чий залишок впав до порогу чи нижче.
+   Того самого кольору, що поле помилки форми (--color-error), щоб
+   одразу впадало в очі серед звичайних сірих бейджів. */
+.admin-table__badge--warning {
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .admin-table__description-cell {
@@ -1265,6 +1254,29 @@
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Кожен colgroup в admin.ts має рівно одну "гумову" <col /> без явної
+   ширини (назва / користувач) — на десктопі вона забирає залишок
+   ширини секції, і це саме те, що треба. Але в table-layout:fixed, коли
+   сума явних пікселевих ширин інших колонок перевищує ширину контейнера
+   (вузький мобільний екран), браузер не розширює таблицю для скролу —
+   він стискає САМЕ невказану колонку аж до 0px, а решта лишаються при
+   своїх пікселях. Візуально це виглядало як "колонка Назва зникла":
+   рядки показували ID і Залишок, а назва інгредієнта пропадала
+   повністю, хоча overflow-x:auto вище мав би дати горизонтальний
+   скрол — просто скролити було вже нічого, бо таблиця й так влазила
+   рівно в 100% контейнера ціною тієї зниклої колонки.
+   Фікс: на вузьких екранах перемикаємо на table-layout:auto — ширини
+   колонок тоді рахуються за вмістом (як у звичайних HTML-таблиць), і
+   жодна колонка не може стиснутись до 0 просто тому, що суми не
+   зійшлися. Таблиця природно стає ширшою за контейнер і коректно
+   скролиться горизонтально — саме той сценарій, для якого
+   .admin-table-wrap вже має overflow-x:auto. */
+@media (max-width: 700px) {
+  .admin-table {
+    table-layout: auto;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1653,15 +1665,20 @@ body.has-open-user-menu .mobile-search {
     box-shadow: 0 10px 26px rgba(43, 29, 20, 0.2);
     overflow: hidden;
     opacity: 0;
-    /* Тільки opacity — без transition на flex-grow.
-       Анімація ширини під час набору на iOS змушує Safari
-       перераховувати позицію каретки → дригання. */
-    transition: opacity 0.15s ease;
+    /* flex-grow (ширина) навмисно БЕЗ transition — анімація ширини під
+       час набору на iOS змушує Safari перераховувати позицію каретки →
+       дригання. Сама поява поля анімується інакше: transform/opacity —
+       композитні властивості, не чіпають layout інпута зсередини, тож
+       не викликають цей баг, а ефект "виростання з кнопки" лишається. */
+    transform: scale(0.85);
+    transform-origin: right center;
+    transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .mobile-search--open .mobile-search__field {
     flex-grow: 1;
     opacity: 1;
+    transform: scale(1);
   }
 
   .mobile-search__field-icon {
@@ -1733,43 +1750,6 @@ body.has-open-user-menu .mobile-search {
     display: flex;
   }
 
-  /* --- кнопка ШІ-чату: з'являється лише в розкритому стані, зі свіченням --- */
-  .mobile-search__ai {
-    flex-shrink: 0;
-    width: 0;
-    height: 56px;
-    border-radius: var(--radius-md);
-    border: none;
-    background: #4A3B7C;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    opacity: 0;
-    transform: scale(0.6);
-    /* Швидка поява без довгої анімації ширини — менше reflow під час фокусу. */
-    transition: width 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
-  }
-
-  .mobile-search--open .mobile-search__ai {
-    width: 56px;
-    opacity: 1;
-    transform: scale(1);
-    /* Статичне свічення замість infinite animation.
-       Безперервний box-shadow animation на iOS Safari провокує
-       постійні перемальовки шару поруч із інпутом — каретка знову
-       починає дригати після того, як спочатку заспокоїлась. */
-    box-shadow: 0 0 14px 2px rgba(124, 92, 255, 0.5),
-      0 0 26px 6px rgba(255, 111, 216, 0.32), 0 0 36px 10px rgba(52, 209, 232, 0.22);
-  }
-
-  .mobile-search__ai svg {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-  }
-
   /* --- toggle: та сама мова скруглень, лупа в закритому, "закрити" у відкритому --- */
   .mobile-search__toggle {
     position: relative;
@@ -1818,9 +1798,6 @@ body.has-open-user-menu .mobile-search {
     transform: translate(-50%, -50%) scale(1);
   }
 
-  .stub__ai-search {
-    display: none;
-  }
 }
 
 /* ==============================
@@ -1888,6 +1865,187 @@ body.has-open-user-menu .mobile-search {
   transform: translateY(0) scale(1);
 }
 
+/* Форма продукту — значно більше полів (харчова цінність, рецепт,
+   теги), ніж у решти модалок адмінки, тож ширша картка читається
+   краще на десктопі. На мобільних все одно на всю ширину (@media
+   нижче), тож тут це суто десктопне посилення. */
+.auth-modal--wide .auth-modal__dialog {
+  max-width: 640px;
+}
+
+/* Кілька коротких полів в один ряд (вага + термін придатності, ціна +
+   знижка + залишок) — той самий прийом, що вже є в grid-розкладках
+   деінде в адмінці, просто локальний під форму продукту. */
+.admin-product-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Підписи полів різної довжини (напр. "Знижка, % (необов'язково)"
+   переноситься на 2 рядки, а "Ціна, ₴" — ні), тож самі інпути в одному
+   ряду "розʼїжджались" по вертикалі. Резервуємо однакову висоту під
+   підпис (2 рядки з тим самим line-height) незалежно від того, чи
+   реально він переноситься — тоді всі інпути в ряду завжди на одній
+   лінії. */
+.admin-product-row .field label {
+  display: flex;
+  align-items: flex-end;
+  min-height: 2.6em;
+  line-height: 1.3;
+}
+
+.admin-product-subheading {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.admin-product-nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 520px) {
+  .admin-product-nutrition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Рецепт продукту: один рядок = один інгредієнт + кількість. Той самий
+   .field-стиль на select/input, що й деінде у формах, просто три
+   елементи в ряд замість одного. */
+.admin-product-recipe-row {
+  display: grid;
+  grid-template-columns: 1fr 110px auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.admin-product-recipe-row select,
+.admin-product-recipe-row input {
+  width: 100%;
+}
+
+.admin-product-recipe-row__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.admin-product-recipe-row__remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-product-recipe-row__remove:hover {
+    border-color: var(--color-error);
+    color: var(--color-error);
+  }
+}
+
+.admin-product-add-row-btn {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-accent-dark);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-product-add-row-btn:hover {
+    border-color: var(--color-accent);
+    background: var(--color-surface-muted);
+  }
+}
+
+/* Теги продукту — чекбокси-пігулки, той самий принцип вибору "кілька з
+   багатьох", що payment-type-grid вище для типу оплати (радіо), тільки
+   тут можна відзначити відразу декілька. */
+.admin-product-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-product-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Чекбокс-пігулки тегів — це теж <label> усередині .field, тож
+   загальне правило .field label вище (display:block, жирний шрифт,
+   margin-bottom) переважало це через вищу специфічність і ламало
+   inline-flex — прапорець/іконка/назва в кожній пігулці стосали
+   одне під одним, і сам ряд пігулок "розсипався" у вертикальний
+   список. Тут специфічність явно вища (.field .admin-product-tag-chip),
+   тож ця версія перемагає. */
+.field .admin-product-tag-chip {
+  display: inline-flex;
+  font-weight: 400;
+  margin-bottom: 0;
+}
+
+.admin-product-tag-chip input {
+  margin: 0;
+  flex-shrink: 0;
+  align-self: center;
+  accent-color: var(--color-accent);
+}
+
+.admin-product-tag-chip__icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+  align-self: center;
+  display: block;
+}
+
+.admin-product-tag-chip__label {
+  display: inline-block;
+  line-height: 1.2;
+}
+
+.admin-product-tag-chip--checked {
+  border-color: var(--color-accent);
+  background: var(--color-surface-muted);
+  color: var(--color-accent-dark);
+  font-weight: 600;
+}
+
+.admin-product-tags-empty {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
 .auth-modal__close {
   position: absolute;
   top: var(--space-4);
@@ -1925,6 +2083,16 @@ body.has-open-user-menu .mobile-search {
   font-size: var(--fs-xl);
   margin-bottom: var(--space-2);
   padding-right: var(--space-6);
+}
+
+/* "Все збережемо, лише увійдіть в акаунт" (favorite-modal у product.html)
+   — на мобільних ширинах заголовок ламається на 3 рядки, і базовий
+   line-height:1.5 з body (успадкований, бо в h1-h3 свого немає) робить
+   його візуально розтягнутим. Трохи щільніше саме тут. */
+@media (max-width: 640px) {
+  #favorite-modal-title {
+    line-height: 1.25;
+  }
 }
 
 .auth-modal__subtitle {

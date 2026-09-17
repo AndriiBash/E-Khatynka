@@ -50,6 +50,14 @@
   font-size: 7rem;
 }
 
+.product-page__photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  display: block;
+}
+
 .product-page__favorite {
   position: absolute;
   top: var(--space-3);

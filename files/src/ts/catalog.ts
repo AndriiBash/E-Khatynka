@@ -1,4 +1,4 @@
-import { PRODUCTS, type Product } from "./products.js";
+import { PRODUCTS, loadProducts, type Product } from "./products.js";
 import { getCategories } from "./storage.js";
 import type { ApiCategory } from "./types.js";
 import {
@@ -93,11 +93,40 @@ async function loadCategories(): Promise<void> {
   updateHeroSubtitle();
 }
 
+function productImageHtml(p: Product): string {
+  if (p.imageUrl) {
+    // onerror — та сама страховка, що й іконки категорій/тегів в
+    // адмінці: бита чи ще не завантажена картинка не лишає порожню
+    // рамку, просто відкочується до емодзі-заглушки.
+    return `<img class="product-card__photo" src="${p.imageUrl}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-card__image', textContent: '${p.emoji}'}))" />`;
+  }
+  return `<div class="product-card__image" aria-hidden="true">${p.emoji}</div>`;
+}
+
+function productPriceHtml(p: Product): string {
+  if (p.discountPercent > 0 && p.originalPrice > p.price) {
+    return `
+      <div class="product-card__price-row">
+        <span class="product-card__price product-card__price--sale">${p.price} ${CURRENCY}</span>
+        <span class="product-card__price-old">${p.originalPrice} ${CURRENCY}</span>
+      </div>`;
+  }
+  return `<div class="product-card__price">${p.price} ${CURRENCY}</div>`;
+}
+
+function discountBadgeHtml(p: Product): string {
+  if (p.discountPercent > 0 && p.originalPrice > p.price) {
+    return `<span class="product-card__badge">−${p.discountPercent}%</span>`;
+  }
+  return "";
+}
+
 function productCardHtml(p: Product): string {
   return `
     <article class="product-card" data-product-id="${p.id}">
       <div class="product-card__image-wrap">
-        <div class="product-card__image" aria-hidden="true">${p.emoji}</div>
+        ${productImageHtml(p)}
+        ${discountBadgeHtml(p)}
         <div class="product-card__control">
           <button class="product-card__plus" type="button" data-add="${p.id}" aria-label="Додати">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -112,7 +141,7 @@ function productCardHtml(p: Product): string {
         </div>
       </div>
       <div class="product-card__info">
-        <div class="product-card__price">${p.price} ${CURRENCY}</div>
+        ${productPriceHtml(p)}
         <h3 class="product-card__name">${p.name}</h3>
       </div>
     </article>`;
@@ -501,7 +530,12 @@ export function setupCatalog(): void {
   // тільки після невеликої паузи — реальні картки. Суто для відчуття
   // "щось вантажиться", а не миттєвий стрибок порожньо→повно.
   renderProductSkeletons();
-  window.setTimeout(renderProducts, SKELETON_DELAY_MS);
+  window.setTimeout(() => {
+    void (async () => {
+      await loadProducts();
+      renderProducts();
+    })();
+  }, SKELETON_DELAY_MS);
   subscribeCart(renderCart);
   setupMobileCartSheet();
   setupMobileCartSheetAutoClose();

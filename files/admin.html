@@ -260,6 +260,161 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="admin-ingredient-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-ingredient-modal-title">
+      <button class="auth-modal__close" id="admin-ingredient-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-ingredient-modal-title">Додати інгредієнт</h2>
+      <form id="admin-ingredient-form" novalidate>
+        <div class="field">
+          <label for="admin-ingredient-name">Назва</label>
+          <input type="text" id="admin-ingredient-name" name="name" autocomplete="off" placeholder="Борошно пшеничне" />
+          <span class="field-error" id="admin-ingredient-name-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-ingredient-unit">Одиниця виміру</label>
+          <select id="admin-ingredient-unit" name="unit">
+            <option value="кг">кг</option>
+            <option value="г">г</option>
+            <option value="л">л</option>
+            <option value="мл">мл</option>
+            <option value="шт">шт</option>
+            <option value="уп">уп</option>
+            <option value="пачка">пачка</option>
+            <option value="банка">банка</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="admin-ingredient-stock">Залишок на складі</label>
+          <input type="number" id="admin-ingredient-stock" name="stockQuantity" min="0" step="0.1" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="admin-ingredient-threshold">Поріг низького залишку (необов'язково)</label>
+          <input type="number" id="admin-ingredient-threshold" name="lowStockThreshold" min="0" step="0.1" autocomplete="off" placeholder="Наприклад, 5" />
+        </div>
+        <div class="field">
+          <label>Іконка (необов'язково)</label>
+          <div class="admin-icon-picker">
+            <span class="admin-icon-picker__preview-slot" id="admin-ingredient-icon-preview"></span>
+            <label class="admin-icon-picker__pick-btn" for="admin-ingredient-icon-file">Обрати файл</label>
+            <input class="admin-icon-picker__input" type="file" id="admin-ingredient-icon-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" />
+            <button class="admin-icon-picker__clear" id="admin-ingredient-icon-clear" type="button" hidden>Прибрати</button>
+            <span class="admin-icon-picker__status" id="admin-ingredient-icon-status"></span>
+          </div>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-ingredient-modal-submit">Додати інгредієнт</button>
+        <p class="form-message" id="admin-ingredient-message"></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="auth-modal auth-modal--wide" id="admin-product-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-product-modal-title">
+      <button class="auth-modal__close" id="admin-product-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-product-modal-title">Додати продукт</h2>
+      <form id="admin-product-form" novalidate>
+        <div class="field">
+          <label for="admin-product-name">Назва продукту</label>
+          <input type="text" id="admin-product-name" name="name" autocomplete="off" placeholder="Круасан з мигдалем" />
+          <span class="field-error" id="admin-product-name-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-product-category">Категорія</label>
+          <select id="admin-product-category" name="categoryId"></select>
+          <span class="field-error" id="admin-product-category-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-product-description">Опис (необов'язково)</label>
+          <textarea id="admin-product-description" name="description" rows="2"></textarea>
+        </div>
+        <div class="admin-product-row">
+          <div class="field">
+            <label for="admin-product-weight">Вага/об'єм (необов'язково)</label>
+            <input type="text" id="admin-product-weight" name="weight" autocomplete="off" placeholder="Наприклад, 120 г" />
+          </div>
+          <div class="field">
+            <label for="admin-product-shelf-life">Термін придатності, днів (необов'язково)</label>
+            <input type="number" id="admin-product-shelf-life" name="shelfLifeDays" min="0" step="1" autocomplete="off" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="admin-product-storage">Умови зберігання (необов'язково)</label>
+          <input type="text" id="admin-product-storage" name="storageConditions" autocomplete="off" placeholder="Наприклад, при +2…+6°C" />
+        </div>
+
+        <p class="admin-product-subheading">Харчова цінність на 100 г (необов'язково)</p>
+        <div class="admin-product-nutrition-grid">
+          <div class="field">
+            <label for="admin-product-calories">Калорії, ккал</label>
+            <input type="number" id="admin-product-calories" name="calories" min="0" step="0.1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="admin-product-proteins">Білки, г</label>
+            <input type="number" id="admin-product-proteins" name="proteins" min="0" step="0.1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="admin-product-fats">Жири, г</label>
+            <input type="number" id="admin-product-fats" name="fats" min="0" step="0.1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="admin-product-carbs">Вуглеводи, г</label>
+            <input type="number" id="admin-product-carbs" name="carbohydrates" min="0" step="0.1" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="admin-product-row">
+          <div class="field">
+            <label for="admin-product-price">Ціна, ₴</label>
+            <input type="number" id="admin-product-price" name="price" min="0" step="0.01" autocomplete="off" />
+            <span class="field-error" id="admin-product-price-error"></span>
+          </div>
+          <div class="field">
+            <label for="admin-product-discount">Знижка, % (необов'язково)</label>
+            <input type="number" id="admin-product-discount" name="discountPercent" min="0" max="100" step="1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="admin-product-stock">Залишок, шт</label>
+            <input type="number" id="admin-product-stock" name="stockQuantity" min="0" step="1" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Фото (необов'язково)</label>
+          <div class="admin-icon-picker">
+            <span class="admin-icon-picker__preview-slot" id="admin-product-icon-preview"></span>
+            <label class="admin-icon-picker__pick-btn" for="admin-product-icon-file">Обрати файл</label>
+            <input class="admin-icon-picker__input" type="file" id="admin-product-icon-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" />
+            <button class="admin-icon-picker__clear" id="admin-product-icon-clear" type="button" hidden>Прибрати</button>
+            <span class="admin-icon-picker__status" id="admin-product-icon-status"></span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Рецепт — інгредієнти на одиницю продукту (необов'язково)</label>
+          <div id="admin-product-recipe-rows" class="admin-product-recipe-rows"></div>
+          <button class="admin-product-add-row-btn" type="button" id="admin-product-recipe-add-btn">+ Додати інгредієнт</button>
+        </div>
+
+        <div class="field">
+          <label>Теги (необов'язково)</label>
+          <div id="admin-product-tags-list" class="admin-product-tags-list"></div>
+        </div>
+
+        <button class="btn--primary" type="submit" id="admin-product-modal-submit">Додати продукт</button>
+        <p class="form-message" id="admin-product-message"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="auth-modal" id="admin-delete-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-delete-modal-title">
@@ -273,6 +428,22 @@
       <div class="clear-cart-modal__actions">
         <button class="btn btn--ghost" id="admin-delete-modal-cancel" type="button">Скасувати</button>
         <button class="btn btn--danger" id="admin-delete-modal-confirm" type="button">Так, видалити</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-modal" id="admin-alert-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-alert-modal-title">
+      <button class="auth-modal__close" id="admin-alert-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-alert-modal-title">Помилка</h2>
+      <p class="auth-modal__subtitle" id="admin-alert-modal-text"></p>
+      <div class="clear-cart-modal__actions">
+        <button class="btn btn--primary" id="admin-alert-modal-ok" type="button">Зрозуміло</button>
       </div>
     </div>
   </div>

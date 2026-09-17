@@ -1,8 +1,8 @@
-import { PRODUCTS, type Product } from "./products.js";
+import { PRODUCTS, loadProducts, type Product } from "./products.js";
 import { addToCart, setQty, getCartItems, subscribeCart, type CartItem } from "./cart.js";
 import { getSession } from "./storage.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler, closeAuthModal } from "./auth-modal.js";
-import { isFavorite, toggleFavorite } from "./favorites.js";
+import { isFavorite, toggleFavorite, loadFavorites } from "./favorites.js";
 
 // ==============================
 // Сторінка товару ("карточка товару" в термінології е-commerce) — бере
@@ -86,13 +86,20 @@ function renderSkeleton(root: HTMLElement): void {
   `;
 }
 
+function productPageImageHtml(product: Product): string {
+  if (product.imageUrl) {
+    return `<img class="product-page__photo" src="${product.imageUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-page__image', textContent: '${product.emoji}'}))" />`;
+  }
+  return `<div class="product-page__image" aria-hidden="true">${product.emoji}</div>`;
+}
+
 function renderProduct(root: HTMLElement, product: Product, id: string): void {
   document.title = `${product.name} – Є-Хатинка`;
 
   root.innerHTML = `
     <div class="product-page__layout">
       <div class="product-page__image-wrap">
-        <div class="product-page__image" aria-hidden="true">${product.emoji}</div>
+        ${productPageImageHtml(product)}
         <button class="product-page__favorite" id="product-page-favorite" type="button" aria-label="Додати в обране" aria-pressed="false"></button>
       </div>
 
@@ -152,7 +159,15 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
   // ---- Обране: гарантовано лише для авторизованих ----
   const favoriteBtn = document.getElementById("product-page-favorite");
   if (favoriteBtn) {
-    renderFavoriteIcon(favoriteBtn, isFavorite(id));
+    // Початковий стан серця має сенс лише для вже залогіненого — інакше
+    // список бажаного йому ще не належить.
+    void (async () => {
+      const session = await getSession();
+      if (session) {
+        await loadFavorites();
+        renderFavoriteIcon(favoriteBtn, isFavorite(id));
+      }
+    })();
 
     // Якщо людина клікнула серце, не будучи залогіненою, і потім
     // увійшла через модалку запрошення — одразу довершуємо ту саму дію,
@@ -167,7 +182,8 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
           openFavoriteModal();
           return;
         }
-        renderFavoriteIcon(favoriteBtn, toggleFavorite(id));
+        await loadFavorites();
+        renderFavoriteIcon(favoriteBtn, await toggleFavorite(id));
       })();
     });
 
@@ -187,19 +203,33 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
       closeFavoriteModal();
       if (pendingToggleAfterLogin) {
         pendingToggleAfterLogin = false;
-        renderFavoriteIcon(favoriteBtn, toggleFavorite(id));
+        void (async () => {
+          // Щойно залогінились цієї ж миті — власного кешу списку
+          // бажаного ще не було жодного разу завантажено.
+          await loadFavorites();
+          renderFavoriteIcon(favoriteBtn, await toggleFavorite(id));
+        })();
       }
     });
     setupAuthModal();
   }
 }
 
-function init(): void {
+async function init(): Promise<void> {
   const root = document.getElementById("product-page-root");
   if (!root) return;
 
+  // Скелетон одразу, товари вантажимо паралельно з ним (реальний
+  // мережевий запит тепер, а не мок-масив у пам'яті) — той самий
+  // мінімальний показ SKELETON_DELAY_MS, що й раніше, тільки тепер
+  // прив'язаний і до реальної відповіді сервера, не лише до таймера.
+  renderSkeleton(root);
+
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id");
+
+  await Promise.all([loadProducts(), new Promise((resolve) => window.setTimeout(resolve, SKELETON_DELAY_MS))]);
+
   const product = PRODUCTS.find((p) => p.id === id);
 
   if (!product || !id) {
@@ -210,12 +240,9 @@ function init(): void {
     return;
   }
 
-  // Спочатку — переливчастий скелетон (як у YouTube/Яндекс Лавці), і
-  // тільки після невеликої паузи — реальний вміст. Так само, як у
-  // каталозі (catalog.ts) — товари локальні, реальної затримки мережі
-  // тут немає, це суто про відчуття "щось вантажиться".
-  renderSkeleton(root);
-  window.setTimeout(() => renderProduct(root, product, id), SKELETON_DELAY_MS);
+  renderProduct(root, product, id);
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  void init();
+});

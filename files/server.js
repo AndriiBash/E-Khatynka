@@ -68,6 +68,15 @@ if (tableExists("user_ingredient_preferences")) {
   db.exec("DROP TABLE user_ingredient_preferences;");
 }
 
+// Додаємо icon_url до вже існуючої таблиці ingredients (той самий
+// принцип, що icon_url у категорій/тегів — посилання на файл в
+// assets/icons/ingredients/). CREATE TABLE IF NOT EXISTS нижче не
+// зачепить колонки вже існуючої таблиці, тож для баз, створених до
+// цієї зміни, додаємо колонку окремо через ALTER TABLE.
+if (tableExists("ingredients") && !columnExists("ingredients", "icon_url")) {
+  db.exec("ALTER TABLE ingredients ADD COLUMN icon_url TEXT;");
+}
+
 // Схема з ER-діаграми (users/sessions лишились як були — щоб не зламати
 // вже написані /api/register, /api/login тощо; role/expires_at додані
 // нові поля з діаграми). Всі інші таблиці — новий каталог/кошик/
@@ -204,7 +213,8 @@ db.exec(`
     name TEXT NOT NULL,
     unit TEXT NOT NULL,
     stock_quantity REAL NOT NULL DEFAULT 0,
-    low_stock_threshold REAL
+    low_stock_threshold REAL,
+    icon_url TEXT
   );
 
   -- Норма витрати: скільки ingredient_id має йти на один product_id.
@@ -391,6 +401,15 @@ app.post("/api/register", (req, res) => {
     "INSERT INTO users (id, full_name, email, phone, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
   ).run(id, trimmedName, normalizedEmail, phone.trim(), hashPassword(password), Date.now());
 
+  // Кожному новому покупцю одразу заводимо "Готівка кур'єру" основним
+  // способом оплати — щоб на чекауті завжди було чим розрахуватись,
+  // навіть якщо людина ще жодного разу не заходила в "Способи оплати".
+  // Це не блокує подальше редагування: юзер може додати картку/Apple
+  // Pay й зробити основним щось інше — тут просто розумний дефолт.
+  db.prepare(
+    "INSERT INTO payment_methods (user_id, type, label, is_default, created_at) VALUES (?, 'cash', ?, 1, ?)"
+  ).run(id, PAYMENT_METHOD_DEFAULT_LABEL.cash, Date.now());
+
   const token = createSession(id);
   res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
   res.json({ ok: true, user: { id, fullName: trimmedName, email: normalizedEmail } });
@@ -471,6 +490,38 @@ function findCategoryByName(name, excludeId) {
 app.get("/api/categories", (req, res) => {
   const rows = db.prepare("SELECT * FROM categories ORDER BY id ASC").all();
   res.json({ categories: rows.map(toCategory) });
+});
+
+// Публічний список товарів для каталогу покупця (index.html/product.html) —
+// той самий підхід, що й /api/categories вище: усе, що адмін збереже
+// через /api/admin/products, одразу зʼявляється тут. На відміну від
+// адмінського /api/admin/products, тут НЕ віддаємо рецепт (ingredient_id
+// покупцю ні до чого, а stock/склад — внутрішня кухня), лише публічно
+// доречні поля + фінальну ціну з урахуванням знижки.
+function toPublicProduct(row) {
+  const discountPercent = row.discount_percent || 0;
+  const price =
+    discountPercent > 0 ? Math.round(row.price * (1 - discountPercent / 100) * 100) / 100 : row.price;
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    name: row.name,
+    description: row.description,
+    weight: row.weight,
+    shelfLifeDays: row.shelf_life_days,
+    storageConditions: row.storage_conditions,
+    price,
+    originalPrice: row.price,
+    discountPercent,
+    imageUrl: row.image_url,
+    stockQuantity: row.stock_quantity,
+    tagIds: getProductTagIds(row.id),
+  };
+}
+
+app.get("/api/products", (req, res) => {
+  const rows = db.prepare("SELECT * FROM products ORDER BY name ASC").all();
+  res.json({ products: rows.map(toPublicProduct) });
 });
 
 app.post("/api/admin/categories", requireAdmin, (req, res) => {
@@ -576,6 +627,8 @@ app.delete("/api/admin/categories/:id", requireAdmin, (req, res) => {
 const ICON_KIND_DIRS = {
   categories: "categories",
   tags: "tags",
+  ingredients: "ingredients",
+  products: "products",
 };
 const MAX_ICON_BYTES = 3 * 1024 * 1024; // 3MB — з запасом для іконки
 
@@ -917,6 +970,47 @@ app.post("/api/me/tag-preferences", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Список бажаного покупця — той самий toggle-паттерн, що вподобання
+// (тегі) вище: POST з { productId, enabled } додає/прибирає один
+// рядок, без окремого DELETE-ендпоінта. UNIQUE(user_id, product_id) в
+// схемі підстраховує від дублів навіть при подвійному кліку.
+app.get("/api/me/wishlist", requireAuth, (req, res) => {
+  const rows = db.prepare("SELECT product_id FROM wishlists WHERE user_id = ?").all(req.currentUser.id);
+  res.json({ ok: true, productIds: rows.map((r) => r.product_id) });
+});
+
+app.post("/api/me/wishlist", requireAuth, (req, res) => {
+  const { productId, enabled } = req.body || {};
+  const numericProductId = Number(productId);
+  if (!Number.isInteger(numericProductId)) {
+    return res.json({ ok: false, error: "Некоректний товар" });
+  }
+
+  const product = db.prepare("SELECT id FROM products WHERE id = ?").get(numericProductId);
+  if (!product) {
+    return res.json({ ok: false, error: "Товар не знайдено" });
+  }
+
+  const userId = req.currentUser.id;
+  const existing = db
+    .prepare("SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?")
+    .get(userId, numericProductId);
+
+  if (enabled) {
+    if (!existing) {
+      db.prepare("INSERT INTO wishlists (user_id, product_id, created_at) VALUES (?, ?, ?)").run(
+        userId,
+        numericProductId,
+        Date.now()
+      );
+    }
+  } else if (existing) {
+    db.prepare("DELETE FROM wishlists WHERE id = ?").run(existing.id);
+  }
+
+  res.json({ ok: true });
+});
+
 // Список користувачів для адмінки — і для таблиці "Користувачі", і для
 // селектора у формі вподобань вище. Без password_hash. orderCount і
 // totalSpent — агрегати по orders (усі статуси, свого поля
@@ -1095,6 +1189,840 @@ const ADMIN_TABLE_TIMESTAMP_COLUMN = {
   ingredient_movements: "created_at",
   user_tag_preferences: "created_at",
 };
+
+// ==============================
+// Інгредієнти (склад) — адмін керує повним CRUD: сировина не привʼязана
+// до конкретного продукту напряму (це product_recipes), тут лише
+// довідник "що взагалі є на складі" з одиницею виміру й залишком.
+// ==============================
+
+function toIngredient(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    unit: row.unit,
+    stockQuantity: row.stock_quantity,
+    lowStockThreshold: row.low_stock_threshold,
+    iconUrl: row.icon_url,
+  };
+}
+
+function findIngredientByName(name, excludeId) {
+  const rows = db.prepare("SELECT * FROM ingredients").all();
+  const normalized = name.trim().toLowerCase();
+  return rows.find((r) => r.id !== excludeId && r.name.trim().toLowerCase() === normalized) || null;
+}
+
+// Спільна перевірка полів для POST і PUT нижче — щоб не тримати дві
+// трохи різні копії тих самих if'ів.
+// Той самий фіксований список, що в <select> адмінки (admin.html) —
+// сервер не довіряє клієнту "на слово": навіть якщо хтось надішле
+// довільний запит напряму в API (не через форму), одиниця виміру все
+// одно має бути з цього переліку.
+const INGREDIENT_UNITS = new Set(["кг", "г", "л", "мл", "шт", "уп", "пачка", "банка"]);
+
+function validateIngredientInput(body) {
+  const { name, unit, stockQuantity, lowStockThreshold, iconUrl } = body || {};
+
+  if (typeof name !== "string" || name.trim().length < 2) {
+    return { error: "Введіть назву інгредієнта (мінімум 2 символи)" };
+  }
+  if (typeof unit !== "string" || !INGREDIENT_UNITS.has(unit.trim())) {
+    return { error: "Оберіть одиницю виміру зі списку" };
+  }
+  const qty = Number(stockQuantity);
+  if (!Number.isFinite(qty) || qty < 0) {
+    return { error: "Залишок на складі має бути невідʼємним числом" };
+  }
+  let threshold = null;
+  if (lowStockThreshold !== null && lowStockThreshold !== undefined && lowStockThreshold !== "") {
+    threshold = Number(lowStockThreshold);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      return { error: "Поріг низького залишку має бути невідʼємним числом" };
+    }
+  }
+
+  const trimmedIconUrl = typeof iconUrl === "string" && iconUrl.trim().length > 0 ? iconUrl.trim() : null;
+
+  return {
+    name: name.trim(),
+    unit: unit.trim(),
+    stockQuantity: qty,
+    lowStockThreshold: threshold,
+    iconUrl: trimmedIconUrl,
+  };
+}
+
+app.get("/api/admin/ingredients", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM ingredients ORDER BY name ASC").all();
+  res.json({ ok: true, ingredients: rows.map(toIngredient) });
+});
+
+app.post("/api/admin/ingredients", requireAdmin, (req, res) => {
+  const parsed = validateIngredientInput(req.body);
+  if (parsed.error) return res.json({ ok: false, error: parsed.error });
+
+  if (findIngredientByName(parsed.name, null)) {
+    return res.json({ ok: false, error: "Інгредієнт з такою назвою вже існує" });
+  }
+
+  const result = db
+    .prepare(
+      "INSERT INTO ingredients (name, unit, stock_quantity, low_stock_threshold, icon_url) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(parsed.name, parsed.unit, parsed.stockQuantity, parsed.lowStockThreshold, parsed.iconUrl);
+
+  const row = db.prepare("SELECT * FROM ingredients WHERE id = ?").get(result.lastInsertRowid);
+  res.json({ ok: true, ingredient: toIngredient(row) });
+});
+
+app.put("/api/admin/ingredients/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id інгредієнта" });
+  }
+
+  const existing = db.prepare("SELECT * FROM ingredients WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Інгредієнт не знайдено" });
+  }
+
+  const parsed = validateIngredientInput(req.body);
+  if (parsed.error) return res.json({ ok: false, error: parsed.error });
+
+  if (findIngredientByName(parsed.name, id)) {
+    return res.json({ ok: false, error: "Інгредієнт з такою назвою вже існує" });
+  }
+
+  // Та сама механіка прибирання файлу старої іконки, що й у
+  // категорій/тегів (deleteOwnedIconFile вище) — якщо іконку замінили
+  // чи прибрали, старий файл в assets/icons/ingredients/ більше нікому
+  // не потрібен.
+  if (existing.icon_url && existing.icon_url !== parsed.iconUrl) {
+    deleteOwnedIconFile(existing.icon_url);
+  }
+
+  db.prepare(
+    "UPDATE ingredients SET name = ?, unit = ?, stock_quantity = ?, low_stock_threshold = ?, icon_url = ? WHERE id = ?"
+  ).run(parsed.name, parsed.unit, parsed.stockQuantity, parsed.lowStockThreshold, parsed.iconUrl, id);
+
+  const row = db.prepare("SELECT * FROM ingredients WHERE id = ?").get(id);
+  res.json({ ok: true, ingredient: toIngredient(row) });
+});
+
+app.delete("/api/admin/ingredients/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id інгредієнта" });
+  }
+
+  const existing = db.prepare("SELECT * FROM ingredients WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Інгредієнт не знайдено" });
+  }
+
+  try {
+    db.prepare("DELETE FROM ingredients WHERE id = ?").run(id);
+  } catch {
+    return res.status(400).json({
+      ok: false,
+      error: "Не можна видалити — інгредієнт використовується в рецептах або русі складу.",
+    });
+  }
+
+  deleteOwnedIconFile(existing.icon_url);
+
+  res.json({ ok: true });
+});
+
+// ==============================
+// Способи оплати — навмисно асиметричний CRUD: додає СВІЙ спосіб лише
+// сам користувач (з попапу в шапці сайту, "Спосіб оплати" — не
+// адмінка), а адмін у своїй таблиці тільки дивиться список усіх і за
+// потреби видаляє (шахрайський/помилковий запис) — але не створює й
+// не редагує чужі картки/гаманці за когось.
+// ==============================
+
+const PAYMENT_METHOD_TYPES = new Set(["card", "apple_pay", "google_pay", "cash"]);
+
+function toAdminPaymentMethod(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userFullName: row.user_full_name,
+    userEmail: row.user_email,
+    type: row.type,
+    label: row.label,
+    isDefault: !!row.is_default,
+    createdAt: row.created_at,
+  };
+}
+
+app.get("/api/admin/payment-methods", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT pm.id, pm.user_id, u.full_name AS user_full_name, u.email AS user_email,
+              pm.type, pm.label, pm.is_default, pm.created_at
+       FROM payment_methods pm
+       JOIN users u ON u.id = pm.user_id
+       ORDER BY pm.created_at DESC`
+    )
+    .all();
+  res.json({ ok: true, paymentMethods: rows.map(toAdminPaymentMethod) });
+});
+
+app.delete("/api/admin/payment-methods/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id способу оплати" });
+  }
+
+  const existing = db.prepare("SELECT id FROM payment_methods WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Спосіб оплати не знайдено" });
+  }
+
+  try {
+    db.prepare("DELETE FROM payment_methods WHERE id = ?").run(id);
+  } catch {
+    return res.status(400).json({
+      ok: false,
+      error: "Не можна видалити — спосіб оплати повʼязаний із замовленнями.",
+    });
+  }
+
+  res.json({ ok: true });
+});
+
+// Покупець додає СВІЙ спосіб оплати — з попапу в меню користувача.
+// provider_token тут навчальна заглушка (не інтегровано зі справжнім
+// платіжним провайдером): для карток лишаємо тільки останні 4 цифри в
+// label, самого номера картки чи токена ніде не зберігаємо.
+// Дефолтна назва, коли покупець не вписав свою — той самий текст, що
+// й у адмінському PAYMENT_METHOD_TYPE_LABELS в admin.ts, тримаємо
+// окремо тут, бо це різні шари (сервер / клієнт).
+const PAYMENT_METHOD_DEFAULT_LABEL = {
+  apple_pay: "Apple Pay",
+  google_pay: "Google Pay",
+  cash: "Готівка кур'єру",
+};
+
+app.get("/api/me/payment-methods", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, type, label, is_default, created_at FROM payment_methods WHERE user_id = ? ORDER BY is_default DESC, created_at DESC"
+    )
+    .all(req.currentUser.id);
+  res.json({
+    ok: true,
+    paymentMethods: rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      label: row.label,
+      isDefault: !!row.is_default,
+      createdAt: row.created_at,
+    })),
+  });
+});
+
+app.post("/api/me/payment-methods", requireAuth, (req, res) => {
+  const { type, cardDigits, customLabel, isDefault } = req.body || {};
+
+  if (typeof type !== "string" || !PAYMENT_METHOD_TYPES.has(type)) {
+    return res.json({ ok: false, error: "Оберіть спосіб оплати" });
+  }
+
+  const trimmedDigits = typeof cardDigits === "string" ? cardDigits.trim() : "";
+  if (type === "card" && !/^\d{4}$/.test(trimmedDigits)) {
+    return res.json({ ok: false, error: "Введіть останні 4 цифри картки" });
+  }
+
+  // Власна назва — необов'язкова для будь-якого типу оплати. Для
+  // картки її додаємо ДО автоматичного "•••• 1234" (а не замінюємо
+  // його), бо останні цифри — це і є найкорисніша частина підпису.
+  const trimmedCustomLabel =
+    typeof customLabel === "string" && customLabel.trim().length > 0 ? customLabel.trim().slice(0, 40) : null;
+
+  let finalLabel;
+  if (type === "card") {
+    finalLabel = trimmedCustomLabel
+      ? `${trimmedCustomLabel} (•••• ${trimmedDigits})`
+      : `Картка •••• ${trimmedDigits}`;
+  } else {
+    finalLabel = trimmedCustomLabel || PAYMENT_METHOD_DEFAULT_LABEL[type] || type;
+  }
+
+  const userId = req.currentUser.id;
+
+  // Максимум 3 способи оплати на юзера — і не більше одного "готівкою",
+  // бо в готівки нема жодного поля, яке б відрізняло один запис від
+  // іншого (не картка з різними цифрами) — другий такий запис був би
+  // просто дублікатом першого.
+  const existingCount = db
+    .prepare("SELECT COUNT(*) AS count FROM payment_methods WHERE user_id = ?")
+    .get(userId).count;
+  if (existingCount >= 3) {
+    return res.json({ ok: false, error: "Можна додати не більше 3 способів оплати" });
+  }
+  if (type === "cash") {
+    const hasCash = db
+      .prepare("SELECT id FROM payment_methods WHERE user_id = ? AND type = 'cash'")
+      .get(userId);
+    if (hasCash) {
+      return res.json({ ok: false, error: "Оплата готівкою вже додана" });
+    }
+  }
+
+  const shouldBeDefault = !!isDefault;
+
+  // DatabaseSync (node:sqlite) не має .transaction() як better-sqlite3
+  // — тут це і не критично: два прості UPDATE/INSERT поспіль без
+  // конкурентного доступу (локальний SQLite-файл, один процес).
+  if (shouldBeDefault) {
+    db.prepare("UPDATE payment_methods SET is_default = 0 WHERE user_id = ?").run(userId);
+  }
+  const result = db
+    .prepare(
+      "INSERT INTO payment_methods (user_id, type, label, is_default, created_at) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(userId, type, finalLabel, shouldBeDefault ? 1 : 0, Date.now());
+
+  const row = db.prepare("SELECT * FROM payment_methods WHERE id = ?").get(result.lastInsertRowid);
+  res.json({
+    ok: true,
+    paymentMethod: {
+      id: row.id,
+      type: row.type,
+      label: row.label,
+      isDefault: !!row.is_default,
+      createdAt: row.created_at,
+    },
+  });
+});
+
+app.delete("/api/me/payment-methods/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id способу оплати" });
+  }
+
+  // Власник перевіряється явно (WHERE user_id = ?), а не лише
+  // існування рядка — інакше покупець міг би видалити чужий спосіб
+  // оплати, підставивши довільний id.
+  const existing = db
+    .prepare("SELECT id FROM payment_methods WHERE id = ? AND user_id = ?")
+    .get(id, req.currentUser.id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Спосіб оплати не знайдено" });
+  }
+
+  db.prepare("DELETE FROM payment_methods WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
+
+// ==============================
+// Продукти — повний CRUD, як в інгредієнтів/категорій, плюс дві вкладені
+// сутності, що редагуються ПРЯМО у формі продукту (а не окремими
+// формами): рецепт (product_recipes — які інгредієнти й скільки йде на
+// одиницю продукту) і теги (product_tags — просто набір tag_id). Обидва
+// на update повністю переписуються (DELETE+INSERT) — простіше й
+// надійніше за діффи, а кількість рядків тут завжди мала.
+// ==============================
+
+function toProduct(row) {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    name: row.name,
+    description: row.description,
+    weight: row.weight,
+    shelfLifeDays: row.shelf_life_days,
+    storageConditions: row.storage_conditions,
+    calories: row.calories,
+    proteins: row.proteins,
+    fats: row.fats,
+    carbohydrates: row.carbohydrates,
+    price: row.price,
+    discountPercent: row.discount_percent,
+    imageUrl: row.image_url,
+    stockQuantity: row.stock_quantity,
+  };
+}
+
+function getProductRecipes(productId) {
+  return db
+    .prepare(
+      `SELECT pr.id, pr.ingredient_id, i.name AS ingredient_name, i.unit AS ingredient_unit, pr.quantity
+       FROM product_recipes pr
+       JOIN ingredients i ON i.id = pr.ingredient_id
+       WHERE pr.product_id = ?
+       ORDER BY i.name ASC`
+    )
+    .all(productId)
+    .map((r) => ({
+      id: r.id,
+      ingredientId: r.ingredient_id,
+      ingredientName: r.ingredient_name,
+      ingredientUnit: r.ingredient_unit,
+      quantity: r.quantity,
+    }));
+}
+
+function getProductTagIds(productId) {
+  return db
+    .prepare("SELECT tag_id FROM product_tags WHERE product_id = ?")
+    .all(productId)
+    .map((r) => r.tag_id);
+}
+
+function toProductFull(row) {
+  return {
+    ...toProduct(row),
+    recipes: getProductRecipes(row.id),
+    tagIds: getProductTagIds(row.id),
+  };
+}
+
+function validateProductInput(body) {
+  const {
+    categoryId,
+    name,
+    description,
+    weight,
+    shelfLifeDays,
+    storageConditions,
+    calories,
+    proteins,
+    fats,
+    carbohydrates,
+    price,
+    discountPercent,
+    imageUrl,
+    stockQuantity,
+    recipes,
+    tagIds,
+  } = body || {};
+
+  const catId = Number(categoryId);
+  if (!Number.isInteger(catId) || !db.prepare("SELECT id FROM categories WHERE id = ?").get(catId)) {
+    return { error: "Оберіть категорію" };
+  }
+  if (typeof name !== "string" || name.trim().length < 2) {
+    return { error: "Введіть назву продукту (мінімум 2 символи)" };
+  }
+  const priceNum = Number(price);
+  if (!Number.isFinite(priceNum) || priceNum <= 0) {
+    return { error: "Ціна має бути додатним числом" };
+  }
+  const discountNum =
+    discountPercent === undefined || discountPercent === null || discountPercent === ""
+      ? 0
+      : Number(discountPercent);
+  if (!Number.isFinite(discountNum) || discountNum < 0 || discountNum > 100) {
+    return { error: "Знижка має бути від 0 до 100%" };
+  }
+  const stockNum =
+    stockQuantity === undefined || stockQuantity === null || stockQuantity === "" ? 0 : Number(stockQuantity);
+  if (!Number.isInteger(stockNum) || stockNum < 0) {
+    return { error: "Залишок на складі має бути невідʼємним цілим числом" };
+  }
+  let shelfLifeNum = null;
+  if (shelfLifeDays !== undefined && shelfLifeDays !== null && shelfLifeDays !== "") {
+    shelfLifeNum = Number(shelfLifeDays);
+    if (!Number.isInteger(shelfLifeNum) || shelfLifeNum < 0) {
+      return { error: "Термін придатності має бути невідʼємним цілим числом днів" };
+    }
+  }
+  const numOrNull = (v) => {
+    if (v === undefined || v === null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : NaN;
+  };
+  const caloriesNum = numOrNull(calories);
+  const proteinsNum = numOrNull(proteins);
+  const fatsNum = numOrNull(fats);
+  const carbsNum = numOrNull(carbohydrates);
+  if ([caloriesNum, proteinsNum, fatsNum, carbsNum].some((n) => Number.isNaN(n))) {
+    return { error: "Харчова цінність має бути невідʼємним числом" };
+  }
+
+  // Рецепт — { ingredientId, quantity }[]; той самий UNIQUE(product_id,
+  // ingredient_id), що в схемі, тож дублі інгредієнта в одному рецепті
+  // просто мовчки відкидаються (лишається перше входження).
+  const parsedRecipes = [];
+  if (Array.isArray(recipes)) {
+    const seen = new Set();
+    for (const r of recipes) {
+      const ingId = Number(r && r.ingredientId);
+      const qty = Number(r && r.quantity);
+      if (!Number.isInteger(ingId) || seen.has(ingId)) continue;
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      if (!db.prepare("SELECT id FROM ingredients WHERE id = ?").get(ingId)) continue;
+      seen.add(ingId);
+      parsedRecipes.push({ ingredientId: ingId, quantity: qty });
+    }
+  }
+
+  const parsedTagIds = [];
+  if (Array.isArray(tagIds)) {
+    for (const t of tagIds) {
+      const tId = Number(t);
+      if (
+        Number.isInteger(tId) &&
+        !parsedTagIds.includes(tId) &&
+        db.prepare("SELECT id FROM tags WHERE id = ?").get(tId)
+      ) {
+        parsedTagIds.push(tId);
+      }
+    }
+  }
+
+  const trimmedImageUrl = typeof imageUrl === "string" && imageUrl.trim().length > 0 ? imageUrl.trim() : null;
+
+  return {
+    categoryId: catId,
+    name: name.trim(),
+    description: typeof description === "string" && description.trim() ? description.trim() : null,
+    weight: typeof weight === "string" && weight.trim() ? weight.trim() : null,
+    shelfLifeDays: shelfLifeNum,
+    storageConditions:
+      typeof storageConditions === "string" && storageConditions.trim() ? storageConditions.trim() : null,
+    calories: caloriesNum,
+    proteins: proteinsNum,
+    fats: fatsNum,
+    carbohydrates: carbsNum,
+    price: priceNum,
+    discountPercent: discountNum,
+    imageUrl: trimmedImageUrl,
+    stockQuantity: stockNum,
+    recipes: parsedRecipes,
+    tagIds: parsedTagIds,
+  };
+}
+
+function replaceProductRecipes(productId, recipes) {
+  db.prepare("DELETE FROM product_recipes WHERE product_id = ?").run(productId);
+  const stmt = db.prepare(
+    "INSERT INTO product_recipes (product_id, ingredient_id, quantity) VALUES (?, ?, ?)"
+  );
+  for (const r of recipes) stmt.run(productId, r.ingredientId, r.quantity);
+}
+
+function replaceProductTags(productId, tagIds) {
+  db.prepare("DELETE FROM product_tags WHERE product_id = ?").run(productId);
+  const stmt = db.prepare("INSERT INTO product_tags (product_id, tag_id) VALUES (?, ?)");
+  for (const tagId of tagIds) stmt.run(productId, tagId);
+}
+
+app.get("/api/admin/products", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM products ORDER BY name ASC").all();
+  res.json({ ok: true, products: rows.map(toProductFull) });
+});
+
+app.post("/api/admin/products", requireAdmin, (req, res) => {
+  const parsed = validateProductInput(req.body);
+  if (parsed.error) return res.json({ ok: false, error: parsed.error });
+
+  const result = db
+    .prepare(
+      `INSERT INTO products
+         (category_id, name, description, weight, shelf_life_days, storage_conditions,
+          calories, proteins, fats, carbohydrates, price, discount_percent, image_url, stock_quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      parsed.categoryId,
+      parsed.name,
+      parsed.description,
+      parsed.weight,
+      parsed.shelfLifeDays,
+      parsed.storageConditions,
+      parsed.calories,
+      parsed.proteins,
+      parsed.fats,
+      parsed.carbohydrates,
+      parsed.price,
+      parsed.discountPercent,
+      parsed.imageUrl,
+      parsed.stockQuantity
+    );
+
+  const productId = result.lastInsertRowid;
+  replaceProductRecipes(productId, parsed.recipes);
+  replaceProductTags(productId, parsed.tagIds);
+
+  const row = db.prepare("SELECT * FROM products WHERE id = ?").get(productId);
+  res.json({ ok: true, product: toProductFull(row) });
+});
+
+app.put("/api/admin/products/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id продукту" });
+  }
+
+  const existing = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Продукт не знайдено" });
+  }
+
+  const parsed = validateProductInput(req.body);
+  if (parsed.error) return res.json({ ok: false, error: parsed.error });
+
+  if (existing.image_url && existing.image_url !== parsed.imageUrl) {
+    deleteOwnedIconFile(existing.image_url);
+  }
+
+  db.prepare(
+    `UPDATE products SET
+       category_id = ?, name = ?, description = ?, weight = ?, shelf_life_days = ?,
+       storage_conditions = ?, calories = ?, proteins = ?, fats = ?, carbohydrates = ?,
+       price = ?, discount_percent = ?, image_url = ?, stock_quantity = ?
+     WHERE id = ?`
+  ).run(
+    parsed.categoryId,
+    parsed.name,
+    parsed.description,
+    parsed.weight,
+    parsed.shelfLifeDays,
+    parsed.storageConditions,
+    parsed.calories,
+    parsed.proteins,
+    parsed.fats,
+    parsed.carbohydrates,
+    parsed.price,
+    parsed.discountPercent,
+    parsed.imageUrl,
+    parsed.stockQuantity,
+    id
+  );
+
+  replaceProductRecipes(id, parsed.recipes);
+  replaceProductTags(id, parsed.tagIds);
+
+  const row = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
+  res.json({ ok: true, product: toProductFull(row) });
+});
+
+app.delete("/api/admin/products/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id продукту" });
+  }
+
+  const existing = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Продукт не знайдено" });
+  }
+
+  // product_recipes/product_tags/cart_items/wishlists без цього продукту
+  // втрачають сенс — прибираємо разом з ним. order_items — навпаки,
+  // історичні (уже оформлене замовлення), тож якщо продукт там
+  // фігурує, видалення блокуємо, щоб не спотворити історію замовлень.
+  const orderedCount = db.prepare("SELECT COUNT(*) AS c FROM order_items WHERE product_id = ?").get(id).c;
+  if (orderedCount > 0) {
+    return res.status(400).json({
+      ok: false,
+      error: "Не можна видалити — продукт вже фігурує в оформлених замовленнях.",
+    });
+  }
+
+  db.prepare("DELETE FROM product_recipes WHERE product_id = ?").run(id);
+  db.prepare("DELETE FROM product_tags WHERE product_id = ?").run(id);
+  db.prepare("DELETE FROM cart_items WHERE product_id = ?").run(id);
+  db.prepare("DELETE FROM wishlists WHERE product_id = ?").run(id);
+  db.prepare("DELETE FROM products WHERE id = ?").run(id);
+
+  deleteOwnedIconFile(existing.image_url);
+
+  res.json({ ok: true });
+});
+
+// ==============================
+// Рецепти й теги продуктів — окремі read-only таблиці в адмінці
+// (крім того, що ці ж дані редагуються прямо у формі продукту, дивись
+// вище): суто для перегляду "які рецепти/теги взагалі є в системі"
+// одним списком по всіх продуктах одразу, без видалення звідси —
+// редагувати можна лише через сам продукт.
+// ==============================
+
+app.get("/api/admin/product-recipes", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT pr.id, pr.product_id, p.name AS product_name,
+              pr.ingredient_id, i.name AS ingredient_name, i.unit AS ingredient_unit, pr.quantity
+       FROM product_recipes pr
+       JOIN products p ON p.id = pr.product_id
+       JOIN ingredients i ON i.id = pr.ingredient_id
+       ORDER BY p.name ASC, i.name ASC`
+    )
+    .all();
+  res.json({
+    ok: true,
+    productRecipes: rows.map((r) => ({
+      id: r.id,
+      productId: r.product_id,
+      productName: r.product_name,
+      ingredientId: r.ingredient_id,
+      ingredientName: r.ingredient_name,
+      ingredientUnit: r.ingredient_unit,
+      quantity: r.quantity,
+    })),
+  });
+});
+
+app.get("/api/admin/product-tags", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT pt.id, pt.product_id, p.name AS product_name, pt.tag_id, t.name AS tag_name
+       FROM product_tags pt
+       JOIN products p ON p.id = pt.product_id
+       JOIN tags t ON t.id = pt.tag_id
+       ORDER BY p.name ASC, t.name ASC`
+    )
+    .all();
+  res.json({
+    ok: true,
+    productTags: rows.map((r) => ({
+      id: r.id,
+      productId: r.product_id,
+      productName: r.product_name,
+      tagId: r.tag_id,
+      tagName: r.tag_name,
+    })),
+  });
+});
+
+// ==============================
+// Списки бажаного — так само асиметрично, як способи оплати: товар у
+// список бажаного додає сам користувач (♥ на сторінці товару), адмін
+// лише переглядає й за потреби видаляє чужий запис.
+// ==============================
+
+function toAdminWishlistItem(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userFullName: row.user_full_name,
+    userEmail: row.user_email,
+    productId: row.product_id,
+    productName: row.product_name,
+    createdAt: row.created_at,
+  };
+}
+
+app.get("/api/admin/wishlists", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT w.id, w.user_id, u.full_name AS user_full_name, u.email AS user_email,
+              w.product_id, p.name AS product_name, w.created_at
+       FROM wishlists w
+       JOIN users u ON u.id = w.user_id
+       JOIN products p ON p.id = w.product_id
+       ORDER BY w.created_at DESC`
+    )
+    .all();
+  res.json({ ok: true, wishlistItems: rows.map(toAdminWishlistItem) });
+});
+
+app.delete("/api/admin/wishlists/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id" });
+  }
+  const existing = db.prepare("SELECT id FROM wishlists WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Запис не знайдено" });
+  }
+  db.prepare("DELETE FROM wishlists WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
+
+// ==============================
+// Кошики й предмети кошика — теж лише перегляд/видалення в адмінці:
+// кошик наповнює сам покупець (у тому числі гість — тоді user_id NULL,
+// а належність визначає session_token). Видалення кошика тягне за
+// собою видалення його предметів (FK інакше блокував би сам DELETE).
+// ==============================
+
+function toAdminCart(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userFullName: row.user_full_name,
+    userEmail: row.user_email,
+    isGuest: !row.user_id,
+    itemsCount: row.items_count,
+    createdAt: row.created_at,
+  };
+}
+
+app.get("/api/admin/carts", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.id, c.user_id, u.full_name AS user_full_name, u.email AS user_email, c.created_at,
+              (SELECT COUNT(*) FROM cart_items ci WHERE ci.cart_id = c.id) AS items_count
+       FROM carts c
+       LEFT JOIN users u ON u.id = c.user_id
+       ORDER BY c.created_at DESC`
+    )
+    .all();
+  res.json({ ok: true, carts: rows.map(toAdminCart) });
+});
+
+app.delete("/api/admin/carts/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id кошика" });
+  }
+  const existing = db.prepare("SELECT id FROM carts WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Кошик не знайдено" });
+  }
+  db.prepare("DELETE FROM cart_items WHERE cart_id = ?").run(id);
+  db.prepare("DELETE FROM carts WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
+
+function toAdminCartItem(row) {
+  return {
+    id: row.id,
+    cartId: row.cart_id,
+    cartOwner: row.user_full_name || row.user_email || "Гість",
+    productId: row.product_id,
+    productName: row.product_name,
+    quantity: row.quantity,
+    addedAt: row.added_at,
+  };
+}
+
+app.get("/api/admin/cart-items", requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT ci.id, ci.cart_id, c.user_id, u.full_name AS user_full_name, u.email AS user_email,
+              ci.product_id, p.name AS product_name, ci.quantity, ci.added_at
+       FROM cart_items ci
+       JOIN carts c ON c.id = ci.cart_id
+       LEFT JOIN users u ON u.id = c.user_id
+       JOIN products p ON p.id = ci.product_id
+       ORDER BY ci.added_at DESC`
+    )
+    .all();
+  res.json({ ok: true, cartItems: rows.map(toAdminCartItem) });
+});
+
+app.delete("/api/admin/cart-items/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.json({ ok: false, error: "Некоректний id" });
+  }
+  const existing = db.prepare("SELECT id FROM cart_items WHERE id = ?").get(id);
+  if (!existing) {
+    return res.status(404).json({ ok: false, error: "Запис не знайдено" });
+  }
+  db.prepare("DELETE FROM cart_items WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
 
 app.get("/api/admin/table-counts", requireAdmin, (req, res) => {
   const counts = {};
