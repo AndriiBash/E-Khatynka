@@ -233,14 +233,29 @@
 }
 
 .product-card__price-old {
-  font-size: var(--fs-sm);
+  position: relative;
+  display: inline-block;
+  /* Було var(--fs-sm) — поряд з жирною новою ціною стара мала майже
+     однакову вагу, хоча мала б читатись явно другорядною. */
+  font-size: var(--fs-xs);
   color: var(--color-text-muted);
-  text-decoration: line-through;
-  /* Сама лінія закреслення — червона (та ж семантика, що знижка), а
-     колір тексту лишається приглушеним сірим — так контраст між
-     "стара/нова" ціна читається краще, ніж суцільно червоний текст. */
-  text-decoration-color: var(--color-error);
-  text-decoration-thickness: 1.5px;
+  /* Замість браузерного text-decoration: line-through (рівна лінія
+     точно по центру літер) — легкий діагональний перекреслюючий
+     штрих через псевдоелемент, як на референсі маркетплейсу: трохи
+     "недбало", помітніше й не зливається з горизонтальними рисками
+     цифр (як-от у "5"). */
+  text-decoration: none;
+}
+
+.product-card__price-old::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: 1.5px;
+  background: var(--color-error);
+  transform: rotate(-8deg);
 }
 
 .product-card__name {
@@ -298,6 +313,26 @@
   .product-card__plus:hover {
     background: var(--color-accent);
     color: #fff;
+  }
+}
+
+/* Ліміт "не більше, ніж на складі" — кнопка "+" (і "+" у степпері)
+   стає сірою й неактивною, щойно кількість у кошику впирається в
+   stockQuantity товару (рахується в catalog.ts/product-page.ts).
+   :disabled замість is-disabled-класу — це звичайний <button disabled>,
+   тож клік по ньому браузер і так не пропустить, стилі тут лише
+   візуальні. */
+.product-card__plus:disabled,
+.product-card__stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card__plus:disabled:hover {
+    background: var(--color-surface);
+    color: var(--color-accent-dark);
   }
 }
 
@@ -549,6 +584,15 @@
   border-radius: 50%;
 }
 
+.cart-item__photo {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+}
+
 .cart-item__info {
   display: flex;
   flex-direction: column;
@@ -602,6 +646,20 @@
 @media (hover: hover) and (pointer: fine) {
   .cart-item__qty button:hover {
     background: var(--color-border);
+  }
+}
+
+/* Той самий "не більше, ніж на складі" ліміт, що на картці товару —
+   кнопка "+" тут теж сіріє, коли кількість у кошику вже дорівнює
+   залишку (дивись cartItemHtml/reconcileCartList у catalog.ts). */
+.cart-item__qty button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cart-item__qty button:disabled:hover {
+    background: var(--color-surface-muted);
   }
 }
 

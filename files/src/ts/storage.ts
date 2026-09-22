@@ -12,7 +12,11 @@ import type {
   ApiAdminCart,
   ApiAdminCartItem,
   ApiAdminProductRecipeItem,
+  ApiAdminIngredientMovement,
   ApiAdminProductTagItem,
+  ApiOrder,
+  ApiAdminOrder,
+  ApiAdminOrderItem,
 } from "./types.js";
 
 // ==============================
@@ -548,6 +552,63 @@ export async function deleteIngredient(id: number): Promise<DeleteResult> {
 }
 
 // ==============================
+// Рух інгредієнтів (журнал складу) — на відміну від решти CRUD, без
+// update: помилковий запис краще видалити (це поверне залишок назад на
+// сервері) і додати новий.
+// ==============================
+
+export async function getIngredientMovements(): Promise<ApiAdminIngredientMovement[]> {
+  try {
+    const res = await fetch("/api/admin/ingredient-movements", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; movements?: ApiAdminIngredientMovement[] };
+    return data.movements ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type IngredientMovementResult =
+  | { ok: true; movement: ApiAdminIngredientMovement }
+  | { ok: false; error: string };
+
+export interface IngredientMovementInput {
+  ingredientId: number;
+  productId: number | null;
+  movementType: string;
+  quantity: number;
+  comment: string;
+}
+
+export async function createIngredientMovement(input: IngredientMovementInput): Promise<IngredientMovementResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/admin/ingredient-movements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  try {
+    return (await res.json()) as IngredientMovementResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function deleteIngredientMovement(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/ingredient-movements/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ==============================
 // Способи оплати. Адмінська сторона — лише перегляд + видалення (див.
 // коментар біля роутів у server.js: створює й редагує СВІЙ спосіб
 // оплати тільки сам покупець, з попапу в шапці сайту).
@@ -846,5 +907,105 @@ export async function getAdminProductTags(): Promise<ApiAdminProductTagItem[]> {
     return data.productTags ?? [];
   } catch {
     return [];
+  }
+}
+
+// ==============================
+// Замовлення — оформлення покупцем (бере поточний кошик на сервері як
+// є) і перегляд власної історії ("Мої замовлення" в user-menu.ts).
+// Адмінська частина — той самий "read + delete" підхід, що в кошиках/
+// списках бажаного вище.
+// ==============================
+
+export interface PlaceOrderInput {
+  deliveryAddress: string;
+  contactPhone: string;
+  paymentMethodId: number | null;
+}
+
+export type PlaceOrderResult = { ok: true; order: ApiOrder } | { ok: false; error: string };
+
+export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+  try {
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    return (await res.json()) as PlaceOrderResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function getMyOrders(): Promise<ApiOrder[]> {
+  try {
+    const res = await fetch("/api/orders", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; orders?: ApiOrder[] };
+    return data.orders ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getAdminOrders(): Promise<ApiAdminOrder[]> {
+  try {
+    const res = await fetch("/api/admin/orders", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; orders?: ApiAdminOrder[] };
+    return data.orders ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminOrder(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/orders/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// Адмін навмисно може міняти в замовленні ЛИШЕ статус (сума/адреса/
+// товари — факт покупки на момент оформлення, заднім числом їх
+// підправляти нема сенсу й небезпечно для звітності) — тому окрема
+// вузька функція, а не загальний updateOrder(...).
+export type UpdateOrderStatusResult = { ok: true; order: ApiAdminOrder } | { ok: false; error: string };
+
+export async function updateAdminOrderStatus(id: number, status: string): Promise<UpdateOrderStatusResult> {
+  try {
+    const res = await fetch(`/api/admin/orders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status }),
+    });
+    return (await res.json()) as UpdateOrderStatusResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export async function getAdminOrderItems(): Promise<ApiAdminOrderItem[]> {
+  try {
+    const res = await fetch("/api/admin/order-items", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; orderItems?: ApiAdminOrderItem[] };
+    return data.orderItems ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAdminOrderItem(id: number): Promise<DeleteResult> {
+  try {
+    const res = await fetch(`/api/admin/order-items/${id}`, { method: "DELETE", credentials: "include" });
+    return (await res.json()) as DeleteResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
   }
 }

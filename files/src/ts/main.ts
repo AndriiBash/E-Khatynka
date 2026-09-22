@@ -1,5 +1,6 @@
 import { getSession, logout } from "./storage.js";
 import { resetFavoritesCache } from "./favorites.js";
+import { resetCartCache, loadCart } from "./cart.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
 import { setupCatalog, setSearchQuery } from "./catalog.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
@@ -365,6 +366,8 @@ async function render(): Promise<void> {
       void (async () => {
         await logout();
         resetFavoritesCache();
+        resetCartCache();
+        await loadCart();
         await render();
       })();
     });
@@ -434,7 +437,14 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLogoHome();
   setupFloatingButtonsDock();
   setAuthSuccessHandler(() => {
-    void render();
+    void (async () => {
+      // Щойно увійшли — сервер під капотом мерджить гостьовий кошик у
+      // акаунтний (getOrCreateCart в server.js), тож перезапитуємо його
+      // тут, а не чекаємо наступного перезавантаження сторінки.
+      resetCartCache();
+      await loadCart();
+      await render();
+    })();
   });
   setupAuthModal();
   setupCatalog();

@@ -186,6 +186,52 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="checkout-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop" id="checkout-modal-backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
+      <button class="auth-modal__close" id="checkout-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div id="checkout-form-view">
+        <h2 id="checkout-modal-title">Оформлення замовлення</h2>
+        <p class="auth-modal__subtitle">Доставка 5–10 хв</p>
+
+        <form id="checkout-form" novalidate>
+          <div class="field">
+            <label for="checkout-address">Адреса доставки</label>
+            <input type="text" id="checkout-address" name="deliveryAddress" autocomplete="street-address" placeholder="Вулиця, будинок, квартира" />
+            <span class="field-error" id="checkout-address-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="checkout-phone">Телефон</label>
+            <input type="tel" id="checkout-phone" name="contactPhone" autocomplete="tel" placeholder="+380XXXXXXXXX" inputmode="tel" />
+            <span class="field-error" id="checkout-phone-error"></span>
+          </div>
+
+          <div class="field">
+            <label for="checkout-payment">Спосіб оплати</label>
+            <select id="checkout-payment" name="paymentMethodId"></select>
+          </div>
+
+          <div class="checkout-summary" id="checkout-summary"></div>
+
+          <button type="submit" class="btn--primary" id="checkout-submit-btn">Перейти до оплати</button>
+          <p class="form-message" id="checkout-message"></p>
+        </form>
+      </div>
+
+      <div id="checkout-success-view" hidden>
+        <h2>Замовлення оформлено!</h2>
+        <p class="auth-modal__subtitle" id="checkout-success-text"></p>
+        <button type="button" class="btn--primary" id="checkout-success-close">Готово</button>
+      </div>
+    </div>
+  </div>
+
   <div class="auth-modal" id="auth-modal" aria-hidden="true">
     <div class="auth-modal__backdrop" id="auth-modal-backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">

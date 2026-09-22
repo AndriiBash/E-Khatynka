@@ -260,6 +260,28 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="admin-order-status-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-order-status-modal-title">
+      <button class="auth-modal__close" id="admin-order-status-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-order-status-modal-title">Статус замовлення</h2>
+      <p class="auth-modal__subtitle">Суму/адресу/товари не можна редагувати заднім числом — лише статус.</p>
+      <form id="admin-order-status-form" novalidate>
+        <div class="field">
+          <label for="admin-order-status-select">Статус</label>
+          <select id="admin-order-status-select" name="status"></select>
+        </div>
+        <button class="btn--primary" type="submit" id="admin-order-status-modal-submit">Зберегти</button>
+        <p class="form-message" id="admin-order-status-message"></p>
+      </form>
+    </div>
+  </div>
+
+
   <div class="auth-modal" id="admin-ingredient-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-ingredient-modal-title">
@@ -312,6 +334,53 @@
     </div>
   </div>
 
+  <div class="auth-modal" id="admin-movement-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-movement-modal-title">
+      <button class="auth-modal__close" id="admin-movement-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="admin-movement-modal-title">Додати рух інгредієнта</h2>
+      <form id="admin-movement-form" novalidate>
+        <div class="field">
+          <label for="admin-movement-ingredient">Інгредієнт</label>
+          <select id="admin-movement-ingredient" name="ingredientId">
+            <option value="">Завантаження…</option>
+          </select>
+          <span class="field-error" id="admin-movement-ingredient-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-movement-type">Тип руху</label>
+          <select id="admin-movement-type" name="movementType">
+            <option value="restock">Поповнення (закупівля)</option>
+            <option value="production">Списано на виробництво</option>
+            <option value="waste">Списання браку</option>
+            <option value="adjustment">Ручне коригування</option>
+          </select>
+        </div>
+        <div class="field" id="admin-movement-product-field">
+          <label for="admin-movement-product">Продукт (необов'язково)</label>
+          <select id="admin-movement-product" name="productId">
+            <option value="">— Не пов'язано з продуктом —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="admin-movement-quantity" id="admin-movement-quantity-label">Кількість</label>
+          <input type="text" inputmode="decimal" id="admin-movement-quantity" name="quantity" autocomplete="off" placeholder="Наприклад, 10" />
+          <span class="field-error" id="admin-movement-quantity-error"></span>
+        </div>
+        <div class="field">
+          <label for="admin-movement-comment">Коментар (необов'язково)</label>
+          <input type="text" id="admin-movement-comment" name="comment" autocomplete="off" placeholder="Наприклад, накладна №123" />
+        </div>
+        <button class="btn--primary" type="submit" id="admin-movement-modal-submit">Додати</button>
+        <p class="form-message" id="admin-movement-message"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="auth-modal auth-modal--wide" id="admin-product-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>
     <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="admin-product-modal-title">
@@ -339,7 +408,7 @@
         <div class="admin-product-row">
           <div class="field">
             <label for="admin-product-weight">Вага/об'єм (необов'язково)</label>
-            <input type="text" id="admin-product-weight" name="weight" autocomplete="off" placeholder="Наприклад, 120 г" />
+            <input type="text" id="admin-product-weight" name="weight" inputmode="decimal" autocomplete="off" placeholder="Наприклад, 120" />
           </div>
           <div class="field">
             <label for="admin-product-shelf-life">Термін придатності, днів (необов'язково)</label>

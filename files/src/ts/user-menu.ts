@@ -1,4 +1,4 @@
-import type { SessionUser } from "./types.js";
+import type { SessionUser, ApiOrder } from "./types.js";
 import { setupSwipeToClose } from "./swipe-sheet.js";
 import {
   getTags,
@@ -7,6 +7,7 @@ import {
   addMyPaymentMethod,
   getMyPaymentMethods,
   deleteMyPaymentMethod,
+  getMyOrders,
   type MyPaymentMethod,
 } from "./storage.js";
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
@@ -42,7 +43,7 @@ export function userMenuHtml(session: SessionUser): string {
   const customerItems = isAdmin
     ? ""
     : `
-        <button class="user-menu__item" type="button">
+        <button class="user-menu__item" id="user-menu-orders-btn" type="button">
           <img class="user-menu__icon" src="assets/icons/orders.svg" alt="" aria-hidden="true" />
           Мої замовлення
         </button>
@@ -58,6 +59,26 @@ export function userMenuHtml(session: SessionUser): string {
           <img class="user-menu__icon" src="assets/icons/preferences.svg" alt="" aria-hidden="true" />
           Мої вподобання
         </button>`;
+
+  // Попап "Мої замовлення" — та сама розмітка/стиль, що й "Список
+  // бажаного" (список-і-попап), тільки кожен пункт — ціле замовлення
+  // (дата/статус/сума) зі списком товарів усередині, а не один товар.
+  const ordersModal = isAdmin
+    ? ""
+    : `
+    <div class="auth-modal" id="my-orders-modal" aria-hidden="true">
+      <div class="auth-modal__backdrop"></div>
+      <div class="auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="my-orders-modal-title">
+        <button class="auth-modal__close" id="my-orders-modal-close" type="button" aria-label="Закрити">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <h2 id="my-orders-modal-title">Мої замовлення</h2>
+        <p class="auth-modal__subtitle">Історія ваших покупок в «Є-Хатинці».</p>
+        <div id="my-orders-list"></div>
+      </div>
+    </div>`;
 
   // Попап "Список бажаного" — та сама розмітка/стиль, що й "Способи
   // оплати" (список-і-попап), лише без форми додавання: товари туди
@@ -208,7 +229,7 @@ export function userMenuHtml(session: SessionUser): string {
           Вийти
         </button>
       </div>
-    </div>${preferencesModal}${paymentModal}${wishlistModal}`;
+    </div>${preferencesModal}${paymentModal}${wishlistModal}${ordersModal}`;
 }
 
 export function setupUserMenu(): void {
@@ -279,7 +300,7 @@ export function setupUserMenu(): void {
     // незалежно від того, чи встиг хтось до цього зняти клас відкриття;
     // а поки попап закритий (visibility: hidden), клік по ньому все
     // одно фізично неможливий, тож зайвого "прилипання" це не додає.
-    const popupIds = ["my-prefs-modal", "my-payment-modal", "my-confirm-modal", "my-wishlist-modal"];
+    const popupIds = ["my-prefs-modal", "my-payment-modal", "my-confirm-modal", "my-wishlist-modal", "my-orders-modal"];
     for (const id of popupIds) {
       const popup = document.getElementById(id);
       if (popup && path.includes(popup)) return;
@@ -295,6 +316,7 @@ export function setupUserMenu(): void {
   setupMyPreferencesModal(close);
   setupMyPaymentModal(close);
   setupMyWishlistModal(close);
+  setupMyOrdersModal(close);
 }
 
 // ==============================
@@ -677,6 +699,116 @@ function setupMyWishlistModal(closeUserMenu: () => void): void {
   });
   closeBtn?.addEventListener("click", closeMyWishlistModal);
   backdrop?.addEventListener("click", closeMyWishlistModal);
+}
+
+// ==============================
+// "Мої замовлення" — той самий список-попап, що вище, тільки кожен
+// пункт розгортає ціле замовлення (дата, статус, сума, список товарів
+// з кількостями). Дані лише для читання — саме оформлення живе в
+// catalog.ts (checkout-модалка на кнопці "Оформити" в кошику).
+// ==============================
+
+const ORDER_STATUS_LABELS_LOCAL: Record<string, string> = {
+  pending: "Очікує обробки",
+  processing: "У обробці",
+  delivering: "Доставляється",
+  completed: "Виконано",
+  cancelled: "Скасовано",
+};
+
+function formatOrderDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function onMyOrdersModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeMyOrdersModal();
+}
+
+function closeMyOrdersModal(): void {
+  const modal = document.getElementById("my-orders-modal");
+  if (!modal) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onMyOrdersModalKeydown);
+  document.body.classList.remove("has-open-user-menu");
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function orderCardHtml(order: ApiOrder): string {
+  const statusLabel = ORDER_STATUS_LABELS_LOCAL[order.status] ?? order.status;
+  return `
+    <li class="my-order-card">
+      <div class="my-order-card__header">
+        <span class="my-order-card__id">Замовлення №${order.id}</span>
+        <span class="my-order-card__status my-order-card__status--${escapeHtmlLocal(order.status)}">${escapeHtmlLocal(
+    statusLabel
+  )}</span>
+      </div>
+      <div class="my-order-card__date">${formatOrderDate(order.createdAt)}</div>
+      <ul class="my-order-card__items">
+        ${order.items
+          .map(
+            (it) =>
+              `<li>${escapeHtmlLocal(it.productName)} × ${it.quantity} — ${
+                Math.round(it.priceAtPurchase * it.quantity * 100) / 100
+              } ${WISHLIST_CURRENCY}</li>`
+          )
+          .join("")}
+      </ul>
+      <div class="my-order-card__footer">
+        <span>Адреса: ${escapeHtmlLocal(order.deliveryAddress)}</span>
+        <span class="my-order-card__total">${Math.round(order.totalAmount)} ${WISHLIST_CURRENCY}</span>
+      </div>
+    </li>`;
+}
+
+async function renderMyOrdersList(): Promise<void> {
+  const list = document.getElementById("my-orders-list");
+  if (!list) return;
+
+  const orders = await getMyOrders();
+
+  if (!orders.length) {
+    list.innerHTML = `<p class="my-payment-methods__empty">Поки що немає жодного замовлення.</p>`;
+    return;
+  }
+
+  list.innerHTML = `<ul class="my-orders-list">${orders.map(orderCardHtml).join("")}</ul>`;
+}
+
+async function openMyOrdersModal(): Promise<void> {
+  const modal = document.getElementById("my-orders-modal");
+  const closeBtn = document.getElementById("my-orders-modal-close");
+  const list = document.getElementById("my-orders-list");
+  if (!modal) return;
+
+  if (list) list.innerHTML = `<p class="my-payment-methods__empty">Завантаження…</p>`;
+
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("has-open-user-menu");
+  lockScroll();
+  document.addEventListener("keydown", onMyOrdersModalKeydown);
+  closeBtn?.focus();
+
+  await renderMyOrdersList();
+}
+
+function setupMyOrdersModal(closeUserMenu: () => void): void {
+  const modal = document.getElementById("my-orders-modal");
+  const openBtn = document.getElementById("user-menu-orders-btn");
+  const closeBtn = document.getElementById("my-orders-modal-close");
+  const backdrop = modal?.querySelector(".auth-modal__backdrop");
+  if (!modal || !openBtn) return;
+
+  openBtn.addEventListener("click", () => {
+    closeUserMenu();
+    openMyOrdersModal();
+  });
+  closeBtn?.addEventListener("click", closeMyOrdersModal);
+  backdrop?.addEventListener("click", closeMyOrdersModal);
 }
 
 // Локальний мінімальний екранувальник — той самий підхід, що в

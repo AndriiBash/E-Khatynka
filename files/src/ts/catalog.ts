@@ -1,5 +1,5 @@
-import { PRODUCTS, loadProducts, type Product } from "./products.js";
-import { getCategories } from "./storage.js";
+import { PRODUCTS, loadProducts, refreshProducts, type Product } from "./products.js";
+import { getCategories, getSession, placeOrder, getMyPaymentMethods, type MyPaymentMethod } from "./storage.js";
 import type { ApiCategory } from "./types.js";
 import {
   addToCart,
@@ -8,11 +8,15 @@ import {
   clearCart,
   getCartItems,
   getCartTotal,
+  getCartOriginalTotal,
+  getCartDiscountTotal,
   getCartCount,
+  loadCart,
   type CartItem,
 } from "./cart.js";
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
 import { setupSwipeToClose } from "./swipe-sheet.js";
+import { openAuthModal } from "./auth-modal.js";
 
 const CURRENCY = "₴";
 
@@ -172,27 +176,34 @@ function removeFromCartAnimated(id: string): void {
 }
 
 function bindProductCardEvents(grid: HTMLElement): void {
-  // Уся картка клікабельна — веде на сторінку товару (поки заглушка).
-  // Кнопки всередині картки (додати/степпер) мають своя власна дія і
-  // зупиняють клік, щоб не спрацьовував ще й перехід на сторінку.
-  grid.querySelectorAll<HTMLElement>(".product-card").forEach((card) => {
-    card.addEventListener("click", () => {
-      const id = card.dataset.productId;
-      if (id) window.location.href = `product.html?id=${encodeURIComponent(id)}`;
-    });
-  });
+  // Один делегований listener на весь грід замість querySelectorAll+
+  // addEventListener на кожен елемент — раніше цю функцію викликали
+  // заново після КОЖНОГО renderProducts() (у тому числі на кожне
+  // натискання клавіші під час пошуку), і при повторному виклику на
+  // тих самих (не пересозданих — дивись reconcileProductCards нижче)
+  // кнопках навішувались ще одні й ще одні обробники, тож клік
+  // спрацьовував по кілька разів. Делегування вішається РІВНО ОДИН РАЗ
+  // на сам контейнер (data-bound), він переживає будь-яку кількість
+  // подальших рендерів вмісту.
+  if (grid.dataset.bound === "1") return;
+  grid.dataset.bound = "1";
 
-  grid.querySelectorAll<HTMLButtonElement>("[data-add]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  grid.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const addBtn = target.closest<HTMLButtonElement>("[data-add]");
+    if (addBtn) {
       e.stopPropagation();
-      const product = PRODUCTS.find((p) => p.id === btn.dataset.add);
+      if (addBtn.disabled) return;
+      const product = PRODUCTS.find((p) => p.id === addBtn.dataset.add);
       if (product) addToCart(product);
-    });
-  });
-  grid.querySelectorAll<HTMLButtonElement>("[data-minus]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+      return;
+    }
+
+    const minusBtn = target.closest<HTMLButtonElement>("[data-minus]");
+    if (minusBtn) {
       e.stopPropagation();
-      const id = btn.dataset.minus;
+      const id = minusBtn.dataset.minus;
       const item = getCartItems().find((i) => i.productId === id);
       if (!id || !item) return;
       if (item.qty <= 1) {
@@ -200,15 +211,27 @@ function bindProductCardEvents(grid: HTMLElement): void {
       } else {
         setQty(id, item.qty - 1);
       }
-    });
-  });
-  grid.querySelectorAll<HTMLButtonElement>("[data-plus]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+      return;
+    }
+
+    const plusBtn = target.closest<HTMLButtonElement>("[data-plus]");
+    if (plusBtn) {
       e.stopPropagation();
-      const id = btn.dataset.plus;
+      if (plusBtn.disabled) return;
+      const id = plusBtn.dataset.plus;
       const item = getCartItems().find((i) => i.productId === id);
       if (id && item) setQty(id, item.qty + 1);
-    });
+      return;
+    }
+
+    // Уся картка клікабельна — веде на сторінку товару (кнопки вище
+    // вже зупинили б клік через return, сюди він доходить лише коли
+    // клікнули поза ними).
+    const card = target.closest<HTMLElement>(".product-card");
+    if (card) {
+      const id = card.dataset.productId;
+      if (id) window.location.href = `product.html?id=${encodeURIComponent(id)}`;
+    }
   });
 }
 
@@ -217,14 +240,27 @@ function bindProductCardEvents(grid: HTMLElement): void {
 // і одразу після рендеру карток (щоб не було "миготіння" не того стану
 // при перемиканні категорій), і на кожну зміну кошика (щоб, наприклад,
 // зміна кількості з панелі кошика одразу відбилась і на картці товару).
+//
+// Тут-таки — обмеження "не більше, ніж є на складі": кнопка "+" (і
+// "+" усередині степпера) стає неактивною/сірою, щойно кількість у
+// кошику досягає stockQuantity товару, і повертається до звичайного
+// стану, щойно кількість знову менша за залишок (наприклад, після
+// зменшення степпером) — цей стан рахується наново при кожному виклику,
+// а не встановлюється один раз, тож "забути повернути" йому нема як.
 function syncProductControls(items: CartItem[]): void {
   document.querySelectorAll<HTMLElement>(".product-card").forEach((card) => {
     const id = card.dataset.productId;
     if (!id) return;
+    const product = PRODUCTS.find((p) => p.id === id);
     const item = items.find((i) => i.productId === id);
-    const plusBtn = card.querySelector<HTMLElement>(".product-card__plus");
+    const plusBtn = card.querySelector<HTMLButtonElement>(".product-card__plus");
     const stepper = card.querySelector<HTMLElement>(".product-card__stepper");
+    const stepperPlusBtn = card.querySelector<HTMLButtonElement>("[data-plus]");
     const qtyDisplay = card.querySelector<HTMLElement>("[data-qty-display]");
+
+    const stock = product?.stockQuantity ?? Infinity;
+    const qty = item?.qty ?? 0;
+    const atMax = qty >= stock;
 
     if (item) {
       plusBtn?.classList.add("is-hidden");
@@ -234,6 +270,57 @@ function syncProductControls(items: CartItem[]): void {
       stepper?.classList.add("is-hidden");
       plusBtn?.classList.remove("is-hidden");
     }
+
+    if (plusBtn) plusBtn.disabled = atMax;
+    if (stepperPlusBtn) stepperPlusBtn.disabled = atMax;
+  });
+}
+
+// Реконсиляція карток товару в гріді — той самий принцип, що
+// reconcileTableRows в admin.ts (дивись коментар там): пошук
+// перерендерює грід на кожне натискання клавіші (renderProducts()
+// нижче), і повний innerHTML щоразу пересоздавав усі картки разом з
+// їхніми <img> фото — вони на мить зникали й підвантажувались заново
+// (видиме "миготіння"), навіть коли сам набір карток, що лишились
+// після фільтра, не змінювався. Картки з тим самим data-product-id
+// тепер переносяться (не пересоздаються), нові — вставляються на своє
+// місце, зниклі — прибираються.
+function reconcileProductCards(grid: HTMLElement, newHtml: string): void {
+  const temp = document.createElement("div");
+  temp.innerHTML = newHtml;
+  const newCards = Array.from(temp.children) as HTMLElement[];
+
+  const oldById = new Map<string, HTMLElement>();
+  Array.from(grid.children).forEach((el) => {
+    const id = (el as HTMLElement).dataset.productId;
+    if (id) oldById.set(id, el as HTMLElement);
+  });
+
+  const usedIds = new Set<string>();
+
+  newCards.forEach((newCard, index) => {
+    const id = newCard.dataset.productId;
+    const oldCard = id ? oldById.get(id) : undefined;
+    const refNode = grid.children[index] ?? null;
+
+    if (oldCard) {
+      usedIds.add(id as string);
+      if (oldCard !== refNode) grid.insertBefore(oldCard, refNode);
+      // Сама картка (фото/степпер) не чіпається — лишень інфо-блок
+      // (ціна/назва) патчиться, якщо реально відрізняється, на випадок
+      // якщо дані товару (знижка тощо) встигли змінитись між рендерами.
+      const oldInfo = oldCard.querySelector(".product-card__info");
+      const newInfo = newCard.querySelector(".product-card__info");
+      if (oldInfo && newInfo && oldInfo.innerHTML !== newInfo.innerHTML) {
+        oldInfo.innerHTML = newInfo.innerHTML;
+      }
+    } else {
+      grid.insertBefore(newCard, refNode);
+    }
+  });
+
+  oldById.forEach((el, id) => {
+    if (!usedIds.has(id)) el.remove();
   });
 }
 
@@ -253,9 +340,24 @@ function renderProducts(): void {
     filtered = activeCategory === "all" ? PRODUCTS : PRODUCTS.filter((p) => p.category === activeCategory);
   }
 
-  grid.innerHTML = filtered.length
-    ? filtered.map(productCardHtml).join("")
-    : `<p class="products-empty">Нічого не знайдено 🤷</p>`;
+  // ВАЖЛИВО: перевіряємо саме [data-product-id], а не просто
+  // ".product-card" — скелетони завантаження (renderProductSkeletons)
+  // теж мають клас .product-card (щоб мати однаковий розмір), але без
+  // data-product-id. Якщо перевіряти на сам клас, перший реальний
+  // рендер після скелетонів помилково йшов гілкою "реконсиляція" —
+  // reconcileProductCards шукає старі картки за id, скелетони під цю
+  // умову не підпадають (в них немає id), тож жодного разу не
+  // потрапляли в oldById і залишались в DOM непроприбраними назавжди:
+  // саме це й було тим "підвантажується незрозуміло що" з бага —
+  // 1 реальна картка товару поряд із 7 скелетонами, що так і не зникли.
+  const hasExistingCards = grid.querySelector("[data-product-id]") !== null;
+  if (filtered.length && hasExistingCards) {
+    reconcileProductCards(grid, filtered.map(productCardHtml).join(""));
+  } else {
+    grid.innerHTML = filtered.length
+      ? filtered.map(productCardHtml).join("")
+      : `<p class="products-empty">Нічого не знайдено 🤷</p>`;
+  }
   bindProductCardEvents(grid);
   syncProductControls(getCartItems());
 }
@@ -274,53 +376,135 @@ export function setSearchQuery(query: string): void {
   }
 }
 
+function cartItemImageHtml(item: CartItem): string {
+  if (item.imageUrl) {
+    return `<img class="cart-item__photo" src="${item.imageUrl}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'cart-item__image', textContent: '${item.emoji}'}))" />`;
+  }
+  return `<div class="cart-item__image" aria-hidden="true">${item.emoji}</div>`;
+}
+
 function cartItemHtml(item: CartItem, isNew: boolean): string {
+  const atMax = item.qty >= item.stockQuantity;
   return `
     <li class="cart-item${isNew ? " cart-item--enter" : ""}" data-cart-item="${item.productId}">
-      <div class="cart-item__image" aria-hidden="true">${item.emoji}</div>
+      ${cartItemImageHtml(item)}
       <div class="cart-item__info">
         <span class="cart-item__name">${item.name}</span>
         <span class="cart-item__price">${item.price} ${CURRENCY}</span>
       </div>
       <div class="cart-item__qty">
         <button type="button" data-qty-minus="${item.productId}" aria-label="Менше">−</button>
-        <span>${item.qty}</span>
-        <button type="button" data-qty-plus="${item.productId}" aria-label="Більше">+</button>
+        <span data-qty-value>${item.qty}</span>
+        <button type="button" data-qty-plus="${item.productId}" aria-label="Більше"${atMax ? " disabled" : ""}>+</button>
       </div>
     </li>`;
 }
 
-// Кнопки +/− усередині самого кошика — той самий removeFromCartAnimated
-// вище відповідає і за коректне зникнення тут.
-function bindQtyButtons(container: HTMLElement, items: CartItem[]): void {
-  container.querySelectorAll<HTMLButtonElement>("[data-qty-minus]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.qtyMinus;
-      const item = items.find((i) => i.productId === id);
-      if (!id || !item) return;
+// Той самий принцип делегування, що bindProductCardEvents у каталозі
+// вище — вішається один раз на контейнер (десктопна панель і мобільна
+// шторка мають кожна свій), переживає будь-яку кількість подальших
+// renderCartBody(). getCartItems() береться на МОМЕНТ кліку (не той
+// масив, що був переданий при першому виклику) — інакше після кількох
+// рендерів делегований обробник бачив би застарілий стан кошика.
+function setupCartQtyDelegation(container: HTMLElement): void {
+  if (container.dataset.bound === "1") return;
+  container.dataset.bound = "1";
 
+  container.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    const minusBtn = target.closest<HTMLButtonElement>("[data-qty-minus]");
+    if (minusBtn) {
+      const id = minusBtn.dataset.qtyMinus;
+      const item = getCartItems().find((i) => i.productId === id);
+      if (!id || !item) return;
       if (item.qty <= 1) {
         removeFromCartAnimated(id);
         return;
       }
-
       setQty(id, item.qty - 1);
-    });
-  });
-  container.querySelectorAll<HTMLButtonElement>("[data-qty-plus]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.qtyPlus;
-      const item = items.find((i) => i.productId === id);
+      return;
+    }
+
+    const plusBtn = target.closest<HTMLButtonElement>("[data-qty-plus]");
+    if (plusBtn) {
+      if (plusBtn.disabled) return;
+      const id = plusBtn.dataset.qtyPlus;
+      const item = getCartItems().find((i) => i.productId === id);
       if (id && item) setQty(id, item.qty + 1);
-    });
+    }
+  });
+}
+
+// Реконсиляція рядків кошика — той самий принцип, що
+// reconcileProductCards вище: збільшення кількості (+) перерендерює
+// увесь список кошика, і повний innerHTML щоразу пересоздавав усі
+// <li> разом з їхніми <img> фото товару — вони на мить зникали й
+// підвантажувались заново (видиме "миготіння" іконки товару в кошику
+// саме при зміні кількості, а не тільки при відкритті). Рядок з тим
+// самим data-cart-item тепер переноситься (не пересоздається), в ньому
+// патчиться лише цифра кількості й стан кнопки "+" — фото й назва не
+// чіпаються взагалі.
+function reconcileCartList(list: HTMLElement, newHtml: string): void {
+  const temp = document.createElement("ul");
+  temp.innerHTML = newHtml;
+  const newItems = Array.from(temp.children) as HTMLElement[];
+
+  const oldById = new Map<string, HTMLElement>();
+  Array.from(list.children).forEach((el) => {
+    const id = (el as HTMLElement).dataset.cartItem;
+    if (id) oldById.set(id, el as HTMLElement);
+  });
+
+  const usedIds = new Set<string>();
+
+  newItems.forEach((newItem, index) => {
+    const id = newItem.dataset.cartItem;
+    const oldItem = id ? oldById.get(id) : undefined;
+    const refNode = list.children[index] ?? null;
+
+    if (oldItem) {
+      usedIds.add(id as string);
+      if (oldItem !== refNode) list.insertBefore(oldItem, refNode);
+
+      const oldQty = oldItem.querySelector("[data-qty-value]");
+      const newQty = newItem.querySelector("[data-qty-value]");
+      if (oldQty && newQty && oldQty.textContent !== newQty.textContent) {
+        oldQty.textContent = newQty.textContent;
+      }
+
+      const oldPlus = oldItem.querySelector<HTMLButtonElement>("[data-qty-plus]");
+      const newPlus = newItem.querySelector<HTMLButtonElement>("[data-qty-plus]");
+      if (oldPlus && newPlus) oldPlus.disabled = newPlus.disabled;
+    } else {
+      list.insertBefore(newItem, refNode);
+    }
+  });
+
+  oldById.forEach((el, id) => {
+    if (!usedIds.has(id)) el.remove();
   });
 }
 
 function renderCartBody(container: HTMLElement, items: CartItem[], newIds: Set<string>): void {
-  container.innerHTML = items.length
-    ? `<ul class="cart-list">${items.map((i) => cartItemHtml(i, newIds.has(i.productId))).join("")}</ul>`
-    : `<div class="cart-empty"><img class="cart-empty__icon" src="assets/images/empty-cart.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />Кошик порожній.<br />Додайте щось смачне 🙂</div>`;
-  bindQtyButtons(container, items);
+  const listHtml = items.map((i) => cartItemHtml(i, newIds.has(i.productId))).join("");
+  const existingList = container.querySelector<HTMLElement>(".cart-list");
+
+  if (items.length && existingList) {
+    reconcileCartList(existingList, listHtml);
+  } else if (!items.length && container.querySelector(".cart-empty")) {
+    // Кошик і був порожній, і лишається порожнім (напр. "Очистити"
+    // натиснули на вже порожньому кошику, або клір спрацював двічі) —
+    // НЕ чіпаємо DOM. Раніше цей випадок теж падав у гілку нижче й
+    // щоразу пересоздавав .cart-empty (разом із її <img>), хоча вміст
+    // виходив ідентичний — саме це й моргало на "долю секунди", коли
+    // насправді міняти було нічого.
+  } else {
+    container.innerHTML = items.length
+      ? `<ul class="cart-list">${listHtml}</ul>`
+      : `<div class="cart-empty"><img class="cart-empty__icon" src="assets/images/empty-cart.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />Кошик порожній.<br />Додайте щось смачне 🙂</div>`;
+  }
+  setupCartQtyDelegation(container);
 }
 
 // Ід товарів, що вже були в кошику на МОМЕНТ попереднього рендеру —
@@ -334,17 +518,45 @@ let previousCartHadItems: boolean | null = null;
 // провал прозорості, але ЛИШЕ коли міняється сам РЕЖИМ (порожньо ↔ є
 // товари), а не при кожній зміні суми всередині одного режиму —
 // інакше кнопка "блимала" б на кожен "+"/"−" в кошику.
+//
+// checkoutTextState зберігає "куди веде" незавершений перехід — БАГ,
+// що був тут раніше: guard звірявся з btn.textContent напряму, а під
+// час 120мс fade текст ще фізично старий. Якщо друге оновлення
+// (напр. після входу в акаунт: спершу reset кошика в 0, одразу за ним
+// підвантаження змердженого кошика з сервера) прилітало so, що НОВИЙ
+// текст випадково збігався зі СТАРИМ (ще не застосованим) текстом —
+// guard хибно казав "нема різниці, нічого робити" й виходив, лишаючи
+// висіти перший, застарілий setTimeout. Той таймаут потім усе одно
+// спрацьовував і перезаписував кнопку на застарілий текст — кнопка
+// назавжди застрягала на "Додайте щось" навіть коли кошик був не
+// порожній. Тепер звіряємось із ЦІЛЬОВИМ текстом переходу (а не з тим,
+// що зараз намальовано), і будь-яке нове оновлення скасовує попередній
+// незавершений таймаут перед тим, як щось вирішувати.
+const checkoutTextState = new WeakMap<HTMLButtonElement, { timer: number; target: string }>();
+
 function setCheckoutText(btn: HTMLButtonElement, text: string, modeChanged: boolean): void {
-  if (btn.textContent === text) return;
+  const pending = checkoutTextState.get(btn);
+  const currentTarget = pending ? pending.target : btn.textContent;
+  if (currentTarget === text) return;
+
+  if (pending) {
+    window.clearTimeout(pending.timer);
+    checkoutTextState.delete(btn);
+  }
+
   if (!modeChanged) {
     btn.textContent = text;
+    btn.classList.remove("is-updating");
     return;
   }
+
   btn.classList.add("is-updating");
-  window.setTimeout(() => {
+  const timer = window.setTimeout(() => {
     btn.textContent = text;
     btn.classList.remove("is-updating");
+    checkoutTextState.delete(btn);
   }, 120);
+  checkoutTextState.set(btn, { timer, target: text });
 }
 
 function renderCart(items: CartItem[]): void {
@@ -523,6 +735,222 @@ function setupClearCartModal(): void {
   });
 }
 
+// ---- Оформлення замовлення — той самий auth-modal візуальний
+// патерн, що й "Очистити кошик?" вище, тільки з формою (адреса/
+// телефон/спосіб оплати) і підсумком ціни. Замовлення можливе лише під
+// акаунтом: гостю замість форми одразу показуємо вхід/реєстрацію
+// (openAuthModal) — після входу треба буде натиснути "Оформити" ще раз,
+// спеціально не підв'язуємось до setAuthSuccessHandler (той хендлер
+// уже зайнятий у main.ts під оновлення кошика після входу, а мати два
+// різні "що робити після успішного логіна" одночасно — зайве
+// ускладнення заради рідкісного кейсу). ----
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  card: "Картка",
+  apple_pay: "Apple Pay",
+  google_pay: "Google Pay",
+  cash: "Готівка кур'єру",
+};
+
+function paymentOptionLabel(m: MyPaymentMethod): string {
+  const base = PAYMENT_TYPE_LABELS[m.type] ?? m.type;
+  return m.label ? `${base} — ${m.label}` : base;
+}
+
+async function populateCheckoutPaymentOptions(): Promise<void> {
+  const select = document.getElementById("checkout-payment") as HTMLSelectElement | null;
+  if (!select) return;
+
+  select.innerHTML = `<option value="">Завантаження…</option>`;
+  const methods = await getMyPaymentMethods();
+
+  if (!methods.length) {
+    select.innerHTML = `<option value="">Готівка кур'єру (за замовчуванням)</option>`;
+    return;
+  }
+
+  select.innerHTML = methods
+    .map((m) => `<option value="${m.id}"${m.isDefault ? " selected" : ""}>${paymentOptionLabel(m)}</option>`)
+    .join("");
+}
+
+// Підсумок "Товари / Знижки / Доставка / До оплати" — той самий набір
+// рядків, що в референсі оформлення (Товари − Знижки + Доставка = До
+// оплати), локалізований під наш каталог. Рядок "Знижки" зʼявляється,
+// лише коли в кошику справді є хоч якась знижка — щоб не показувати
+// "−0 ₴" на порожньому місці.
+function checkoutSummaryHtml(): string {
+  const original = Math.round(getCartOriginalTotal());
+  const discount = Math.round(getCartDiscountTotal());
+  const total = Math.round(getCartTotal());
+
+  return `
+    <div class="checkout-summary__row">
+      <span>Товари</span><span>${original} ${CURRENCY}</span>
+    </div>
+    ${
+      discount > 0
+        ? `<div class="checkout-summary__row checkout-summary__row--discount"><span>Знижки</span><span>−${discount} ${CURRENCY}</span></div>`
+        : ""
+    }
+    <div class="checkout-summary__row">
+      <span>Доставка</span><span>0 ${CURRENCY}</span>
+    </div>
+    <div class="checkout-summary__divider"></div>
+    <div class="checkout-summary__row checkout-summary__row--total">
+      <span>До оплати</span><span>${total} ${CURRENCY}</span>
+    </div>`;
+}
+
+function renderCheckoutSummary(): void {
+  const el = document.getElementById("checkout-summary");
+  if (el) el.innerHTML = checkoutSummaryHtml();
+}
+
+function onCheckoutModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeCheckoutModal();
+}
+
+function resetCheckoutForm(): void {
+  const form = document.getElementById("checkout-form") as HTMLFormElement | null;
+  form?.reset();
+  document.querySelectorAll<HTMLElement>("#checkout-form .field-error").forEach((el) => {
+    el.textContent = "";
+  });
+  const message = document.getElementById("checkout-message");
+  if (message) {
+    message.textContent = "";
+    message.classList.remove("form-message--visible", "form-message--error");
+  }
+
+  const submitBtn = document.getElementById("checkout-submit-btn") as HTMLButtonElement | null;
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Перейти до оплати";
+  }
+
+  document.getElementById("checkout-success-view")?.setAttribute("hidden", "");
+  document.getElementById("checkout-form-view")?.removeAttribute("hidden");
+}
+
+async function openCheckoutModal(): Promise<void> {
+  const session = await getSession();
+  if (!session) {
+    openAuthModal("login");
+    return;
+  }
+  if (!getCartItems().length) return;
+
+  const modal = document.getElementById("checkout-modal");
+  if (!modal) return;
+
+  resetCheckoutForm();
+  // Номер телефону з акаунту — одразу підставлений, але лишається
+  // звичайним редагованим полем: людина отримує посилку не обов'язково
+  // на свій номер (замовляє комусь), тож без права поправити тут не
+  // обійтись.
+  const phoneInput = document.getElementById("checkout-phone") as HTMLInputElement | null;
+  if (phoneInput && session.phone) phoneInput.value = session.phone;
+  renderCheckoutSummary();
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onCheckoutModalKeydown);
+  void populateCheckoutPaymentOptions();
+}
+
+function closeCheckoutModal(): void {
+  const modal = document.getElementById("checkout-modal");
+  if (!modal) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onCheckoutModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+async function submitCheckout(): Promise<void> {
+  const addressInput = document.getElementById("checkout-address") as HTMLInputElement | null;
+  const phoneInput = document.getElementById("checkout-phone") as HTMLInputElement | null;
+  const paymentSelect = document.getElementById("checkout-payment") as HTMLSelectElement | null;
+  const submitBtn = document.getElementById("checkout-submit-btn") as HTMLButtonElement | null;
+  const message = document.getElementById("checkout-message");
+  const addressError = document.getElementById("checkout-address-error");
+  const phoneError = document.getElementById("checkout-phone-error");
+  if (!addressInput || !phoneInput || !submitBtn) return;
+
+  if (addressError) addressError.textContent = "";
+  if (phoneError) phoneError.textContent = "";
+  if (message) message.textContent = "";
+
+  const deliveryAddress = addressInput.value.trim();
+  const contactPhone = phoneInput.value.trim();
+
+  let hasError = false;
+  if (deliveryAddress.length < 5) {
+    if (addressError) addressError.textContent = "Вкажіть повну адресу доставки";
+    hasError = true;
+  }
+  if (!/^\+?\d{9,13}$/.test(contactPhone)) {
+    if (phoneError) phoneError.textContent = "Вкажіть коректний номер телефону";
+    hasError = true;
+  }
+  if (hasError) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Оформлення…";
+
+  const paymentMethodId = paymentSelect?.value ? Number(paymentSelect.value) : null;
+  const result = await placeOrder({ deliveryAddress, contactPhone, paymentMethodId });
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Перейти до оплати";
+
+  if (!result.ok) {
+    if (message) {
+      message.textContent = result.error;
+      message.classList.add("form-message--visible", "form-message--error");
+    }
+    return;
+  }
+
+  // Кошик на сервері вже очищено самим оформленням замовлення
+  // (server.js), clearCart() тут лише синхронізує локальний кеш
+  // cart.ts — повторний DELETE /api/cart, який вона робить, іде в уже
+  // порожній кошик і нешкідливий.
+  clearCart();
+  // І перезапитуємо каталог — сервер щойно списав куплену кількість зі
+  // складу, дивись коментар біля refreshProducts() у products.ts.
+  void refreshProducts().then(() => syncProductControls(getCartItems()));
+
+  const successText = document.getElementById("checkout-success-text");
+  if (successText) {
+    successText.textContent = `Замовлення №${result.order.id} на суму ${Math.round(
+      result.order.totalAmount
+    )} ${CURRENCY} прийнято. Дякуємо за покупку!`;
+  }
+  document.getElementById("checkout-form-view")?.setAttribute("hidden", "");
+  document.getElementById("checkout-success-view")?.removeAttribute("hidden");
+}
+
+function setupCheckoutModal(): void {
+  document.getElementById("cart-checkout-btn")?.addEventListener("click", () => void openCheckoutModal());
+  document.getElementById("mobile-cart-checkout-btn")?.addEventListener("click", () => void openCheckoutModal());
+
+  document.getElementById("checkout-modal-close")?.addEventListener("click", closeCheckoutModal);
+  document.getElementById("checkout-modal-backdrop")?.addEventListener("click", closeCheckoutModal);
+  document.getElementById("checkout-success-close")?.addEventListener("click", () => {
+    closeCheckoutModal();
+    closeMobileCartSheet();
+  });
+
+  document.getElementById("checkout-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void submitCheckout();
+  });
+}
+
 export function setupCatalog(): void {
   renderCategories();
   void loadCategories();
@@ -536,9 +964,18 @@ export function setupCatalog(): void {
       renderProducts();
     })();
   }, SKELETON_DELAY_MS);
+  // Кошик не залежить від скелетон-паузи каталогу — тягнемо одразу,
+  // окремо, паралельно з нею. Йому потрібні готові PRODUCTS (щоб
+  // hydrate() у cart.ts знайшов назву/ціну за id), тож loadProducts()
+  // тут іде першим — але це не зайвий запит, проміс уже кешований.
+  void (async () => {
+    await loadProducts();
+    await loadCart();
+  })();
   subscribeCart(renderCart);
   setupMobileCartSheet();
   setupMobileCartSheetAutoClose();
   setupSheetSwipeToClose();
   setupClearCartModal();
+  setupCheckoutModal();
 }

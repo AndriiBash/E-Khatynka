@@ -554,6 +554,36 @@
   overflow-wrap: break-word;
 }
 
+/* Бейдж статусу замовлення в таблиці/прев'ю (adminсь.ts:orderStatusBadgeHtml)
+   — колір суто візуальний маркер: скасовано червоним, виконано
+   зеленим, доставляється синім, "очікує"/"збирається" — нейтральним
+   приглушеним, щоб не плутати з "усе гаразд" (виконано). */
+.admin-order-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.admin-order-status--delivering {
+  background: #e3edfb;
+  color: #1d5fbf;
+}
+
+.admin-order-status--completed {
+  background: #e4f4e7;
+  color: #2f7a3d;
+}
+
+.admin-order-status--cancelled {
+  background: #fbe7e4;
+  color: var(--color-error);
+}
+
 /* ---- Картка користувача (аватар + іконки-рядки) ---- */
 
 .admin-preview__user-header {
@@ -735,6 +765,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.admin-pagination__ellipsis {
+  min-width: 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  user-select: none;
 }
 
 .admin-pagination__page,
@@ -1818,11 +1859,16 @@ body.has-open-user-menu .mobile-search {
   padding: var(--space-5);
 }
 
-/* Модалка підтвердження очищення кошика використовує ті самі
-   auth-modal класи (єдиний стиль попапів), але відкривається ПОВЕРХ
-   уже відкритої мобільної шторки кошика (z-index: 110) — тож їй
-   потрібен вищий z-index, інакше вона ховається під шторкою. */
-#clear-cart-modal {
+/* Модалка підтвердження очищення кошика й модалка оформлення
+   замовлення використовують ті самі auth-modal класи (єдиний стиль
+   попапів), але відкриваються ПОВЕРХ уже відкритої мобільної шторки
+   кошика (z-index: 110) — тож їм потрібен вищий z-index, інакше вони
+   ховаються під шторкою. Той самий баг, що вже був пофіксений для
+   clear-cart-modal, спливав і в checkout-modal — на мобілці кнопка
+   "Оформити" живе саме в цій шторці, тож він відкривається рівно в тій
+   самій ситуації. */
+#clear-cart-modal,
+#checkout-modal {
   z-index: 120;
 }
 
@@ -2046,6 +2092,74 @@ body.has-open-user-menu .mobile-search {
   color: var(--color-text-muted);
 }
 
+/* Список товарів/рецепту в картці перегляду (продукт → "Рецепт",
+   кошик → "Товари в кошику") — раніше це був голий <ul> без жодного
+   класу-стилю (маркери браузера за замовчуванням), тепер кожен рядок —
+   маленька картка з іконкою-заглушкою товару, як і решта полів
+   перегляду (.admin-preview__field-icon). */
+.admin-product-preview-recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-product-preview-recipe-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.admin-product-preview-recipe-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.admin-product-preview-recipe-icon::before {
+  content: "";
+  display: block;
+  width: 14px;
+  height: 14px;
+  background-color: var(--color-text-muted);
+  -webkit-mask-image: url(../../assets/icons/admin-preview-tag.png);
+  mask-image: url(../../assets/icons/admin-preview-tag.png);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.admin-product-preview-recipe-text {
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* Товари в замовленні (adminOrderItemsListHtml) — той самий рядок-пігулка,
+   що й рецепт продукту, але з реальним фото товару замість декоративної
+   mask-іконки: підтягується з products.image_url. */
+.admin-order-item-icon {
+  display: block;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-surface);
+}
+
 .auth-modal__close {
   position: absolute;
   top: var(--space-4);
@@ -2081,7 +2195,18 @@ body.has-open-user-menu .mobile-search {
    акаунт", де h2 лежить прямо в .auth-modal__dialog). */
 .auth-modal__dialog h2 {
   font-size: var(--fs-xl);
-  margin-bottom: var(--space-2);
+  /* Було успадковано line-height:1.5 з body — з fs-xl (28px) і
+     заголовком на 2+ рядки (як "Замовлення оформлено!") це виглядало
+     розтягнутим міжрядковим інтервалом. Стосується будь-якого
+     заголовка в будь-якій модалці (вхід, чекаут, "Мої замовлення" тощо),
+     а не лише favorite-modal-title нижче, який звужений ще щільніше
+     спеціально під свій 3-рядковий випадок на мобільних. */
+  line-height: 1.2;
+  /* Було var(--space-2) (8px) — помітно менше за відступ між самими
+     полями форми (.field margin-bottom: var(--space-4), 16px), тож
+     перший проміжок "заголовок → перше поле" виглядав тіснішим за
+     решту, хоча мав би бути щонайменше таким самим чи трохи більшим. */
+  margin-bottom: var(--space-5);
   padding-right: var(--space-6);
 }
 
@@ -2091,7 +2216,9 @@ body.has-open-user-menu .mobile-search {
    його візуально розтягнутим. Трохи щільніше саме тут. */
 @media (max-width: 640px) {
   #favorite-modal-title {
-    line-height: 1.25;
+    /* Було 1.25 — з фонт-розміром fs-xl (28px) це все одно виглядало
+       розтягнутим на 2-3 рядках, тож стиснуто ще трохи щільніше. */
+    line-height: 1.15;
   }
 }
 

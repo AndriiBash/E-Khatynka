@@ -163,6 +163,20 @@
   }
 }
 
+/* Той самий "не більше, ніж на складі" ліміт, що на картці товару в
+   каталозі (product-card__plus у layout.css). */
+.product-page__plus:disabled,
+.product-page__stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-page__plus:disabled:hover {
+    background: var(--color-accent);
+  }
+}
+
 .product-page__stepper {
   display: flex;
   align-items: center;
@@ -206,6 +220,103 @@
   font-weight: 700;
   color: var(--color-accent-dark);
   margin-bottom: var(--space-5);
+}
+
+/* Знижка на сторінці товару — той самий принцип, що на картці в
+   каталозі (product-card__price--sale/-old у layout.css): жирна нова
+   ціна червоним, поряд закреслена стара (лінія теж червона), і бейдж
+   з відсотком поруч, а не поверх фото (тут для нього нема кута фото). */
+.product-page__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  /* margin-bottom навмисно НЕ дублюємо тут: .product-page__price
+     (цей самий клас висить і на .product-page__price--sale, бо в
+     розмітці span має обидва класи) вже задає margin-bottom: space-5.
+     Той span — flex-item усередині цього рядка, і його власний
+     margin-bottom додається до висоти рядка так само, як додався б
+     margin-bottom тут — тому раніше відступ під ціною зі знижкою
+     виходив вдвічі більшим, ніж під звичайною ціною (.product-page__price
+     без рядка-обгортки). Прибрано дублікат, лишили один відступ. */
+}
+
+.product-page__price--sale {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--color-error);
+}
+
+.product-page__price-old {
+  position: relative;
+  display: inline-block;
+  /* Було var(--fs-base) — той самий принцип, що й у картці каталогу
+     (product-card__price-old у layout.css): стара ціна має читатись
+     явно другорядною поряд з жирною новою. */
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.product-page__price-old::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: 1.5px;
+  background: var(--color-error);
+  transform: rotate(-8deg);
+}
+
+.product-page__discount-badge {
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  background: var(--color-error);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Харчова цінність — окремий блок під специфікаціями, той самий
+   .product-page__spec-label стиль підпису, що вже є вище, і компактна
+   сітка 2×2 (4×1 на вузьких екранах) для самих чисел. */
+.product-page__nutrition {
+  margin-top: var(--space-5);
+}
+
+.product-page__nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 480px) {
+  .product-page__nutrition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.product-page__nutrition-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  text-align: center;
+}
+
+.product-page__nutrition-value {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.product-page__nutrition-label {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
 }
 
 .product-page__description {

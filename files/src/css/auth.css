@@ -175,6 +175,17 @@
   margin-top: var(--space-1);
 }
 
+/* Порожній .field-error (немає активної помилки) не повинен займати
+   місце — інакше поля, що МАЮТЬ такий span у розмітці (Назва, Ціна),
+   виглядають з більшим відступом до наступного поля, ніж ті, що його
+   не мають (Одиниця виміру, Залишок...), хоча в обох випадках жодної
+   помилки не показано. Коли текст з'явиться, span знову займе висоту —
+   це нормальний зсув саме в момент помилки, а не постійна різниця. */
+.field-error:empty {
+  min-height: 0;
+  margin-top: 0;
+}
+
 .field--checkbox {
   display: flex;
   align-items: center;
@@ -406,6 +417,97 @@
   color: var(--color-text-muted);
 }
 
+/* "Мої замовлення" (user-menu.ts) — на відміну від .my-payment-methods__item
+   (один рядок = одна ціль), тут кожен пункт розгортає ціле замовлення:
+   заголовок зі статусом, дата, список товарів, підсумок. */
+.my-orders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.my-order-card {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.my-order-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.my-order-card__id {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.my-order-card__status {
+  flex-shrink: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-accent-dark);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-pill, 999px);
+  padding: 2px 8px;
+}
+
+.my-order-card__status--delivering {
+  color: #1d5fbf;
+  background: #e3edfb;
+}
+
+.my-order-card__status--completed {
+  color: #2f7a3d;
+  background: #e4f4e7;
+}
+
+.my-order-card__status--cancelled {
+  color: var(--color-error);
+  background: #fbe7e4;
+}
+
+.my-order-card__date {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.my-order-card__items {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+
+.my-order-card__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.my-order-card__total {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .my-payment-back {
   display: inline-flex;
   align-items: center;
@@ -471,6 +573,45 @@
 .form-message--visible.form-message--error {
   background: var(--color-error-bg);
   color: var(--color-error);
+}
+
+/* Підсумок "Товари / Знижки / Доставка / До оплати" у формі
+   оформлення замовлення (checkout-modal, catalog.ts) — той самий
+   набір рядків, що на референсі (Яндекс Лавка тощо): звичайні рядки
+   приглушеним кольором, "Знижки" — акцентним помаранчевим/червоним, і
+   жирний великий підсумок "До оплати" після тонкого розділювача. */
+.checkout-summary {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.checkout-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.checkout-summary__row--discount span:last-child {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.checkout-summary__divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-2) 0;
+}
+
+.checkout-summary__row--total {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .auth__switch {

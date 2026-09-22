@@ -23,6 +23,12 @@ export interface Product {
   description: string;
   shelfLife: string;
   manufacturer: string;
+  calories: number | null;
+  proteins: number | null;
+  fats: number | null;
+  carbohydrates: number | null;
+  composition: string[];
+  stockQuantity: number;
 }
 
 interface ApiPublicProduct {
@@ -33,12 +39,17 @@ interface ApiPublicProduct {
   weight: string | null;
   shelfLifeDays: number | null;
   storageConditions: string | null;
+  calories: number | null;
+  proteins: number | null;
+  fats: number | null;
+  carbohydrates: number | null;
   price: number;
   originalPrice: number;
   discountPercent: number;
   imageUrl: string | null;
   stockQuantity: number;
   tagIds: number[];
+  composition: string[];
 }
 
 // Немає власної іконки/фото в адмінці — товар все одно має щось
@@ -73,6 +84,12 @@ function mapApiProduct(p: ApiPublicProduct): Product {
     description: p.description ?? "",
     shelfLife: shelfLifeText(p),
     manufacturer: "Є-Хатинка, Україна",
+    calories: p.calories,
+    proteins: p.proteins,
+    fats: p.fats,
+    carbohydrates: p.carbohydrates,
+    composition: p.composition ?? [],
+    stockQuantity: p.stockQuantity,
   };
 }
 
@@ -100,4 +117,18 @@ export function loadProducts(): Promise<void> {
     })();
   }
   return loadPromise;
+}
+
+// Примусово перезапитує каталог, ігноруючи кеш loadPromise вище —
+// потрібно рівно один раз, одразу після успішного оформлення
+// замовлення (catalog.ts): сервер щойно списав stock_quantity куплених
+// товарів, а PRODUCTS у браузері досі пам'ятає СТАРІ (більші) залишки з
+// моменту завантаження сторінки. Без цього освіження кнопка "+" ще
+// якийсь час дозволяла б докласти товару понад РЕАЛЬНИЙ залишок (по
+// застарілому клієнтському stockQuantity), сервер це відхиляв би, а
+// кошик на екрані розсинхронився б із cart_items у БД — той самий
+// корінь бага "кошик порожній" при спробі оформити ще раз.
+export async function refreshProducts(): Promise<void> {
+  loadPromise = null;
+  await loadProducts();
 }

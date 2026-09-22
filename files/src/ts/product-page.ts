@@ -1,5 +1,5 @@
 import { PRODUCTS, loadProducts, type Product } from "./products.js";
-import { addToCart, setQty, getCartItems, subscribeCart, type CartItem } from "./cart.js";
+import { addToCart, setQty, getCartItems, subscribeCart, loadCart, resetCartCache, type CartItem } from "./cart.js";
 import { getSession } from "./storage.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler, closeAuthModal } from "./auth-modal.js";
 import { isFavorite, toggleFavorite, loadFavorites } from "./favorites.js";
@@ -17,9 +17,11 @@ const CURRENCY = "₴";
 
 function renderControl(productId: string, items: CartItem[]): void {
   const item = items.find((i) => i.productId === productId);
-  const addBtn = document.getElementById("product-page-add");
+  const product = PRODUCTS.find((p) => p.id === productId);
+  const addBtn = document.getElementById("product-page-add") as HTMLButtonElement | null;
   const stepper = document.getElementById("product-page-stepper");
   const qtyDisplay = document.getElementById("product-page-qty");
+  const plusBtn = document.getElementById("product-page-plus") as HTMLButtonElement | null;
 
   if (item) {
     addBtn?.classList.add("is-hidden");
@@ -29,6 +31,16 @@ function renderControl(productId: string, items: CartItem[]): void {
     stepper?.classList.add("is-hidden");
     addBtn?.classList.remove("is-hidden");
   }
+
+  // Той самий принцип, що на картці товару в каталозі
+  // (syncProductControls у catalog.ts) — кнопка "+" стає неактивною,
+  // щойно кількість у кошику досягає залишку на складі, і сама ж
+  // повертається до звичайного стану, щойно кількість знову менша
+  // (рахується наново при кожному виклику, а не запам'ятовується).
+  const stock = product?.stockQuantity ?? Infinity;
+  const atMax = (item?.qty ?? 0) >= stock;
+  if (addBtn) addBtn.disabled = atMax;
+  if (plusBtn) plusBtn.disabled = atMax;
 }
 
 function renderFavoriteIcon(button: HTMLElement, active: boolean): void {
@@ -93,6 +105,68 @@ function productPageImageHtml(product: Product): string {
   return `<div class="product-page__image" aria-hidden="true">${product.emoji}</div>`;
 }
 
+function productPagePriceHtml(product: Product): string {
+  if (product.discountPercent > 0 && product.originalPrice > product.price) {
+    return `
+      <div class="product-page__price-row">
+        <span class="product-page__price product-page__price--sale">${product.price} ${CURRENCY}</span>
+        <span class="product-page__price-old">${product.originalPrice} ${CURRENCY}</span>
+        <span class="product-page__discount-badge">−${product.discountPercent}%</span>
+      </div>`;
+  }
+  return `<div class="product-page__price">${product.price} ${CURRENCY}</div>`;
+}
+
+// Харчова цінність на 100 г — рядок показується лише якщо хоч одне
+// значення реально задане в адмінці (продукт міг зберегтись і без
+// нього, поле необов'язкове).
+function nutritionFactsHtml(product: Product): string {
+  const facts: { label: string; value: number | null; unit: string }[] = [
+    { label: "Калорійність", value: product.calories, unit: "ккал" },
+    { label: "Білки", value: product.proteins, unit: "г" },
+    { label: "Жири", value: product.fats, unit: "г" },
+    { label: "Вуглеводи", value: product.carbohydrates, unit: "г" },
+  ];
+  const known = facts.filter((f) => f.value !== null);
+  if (!known.length) return "";
+
+  return `
+    <div class="product-page__nutrition">
+      <div class="product-page__spec-label">Харчова цінність на 100 г</div>
+      <div class="product-page__nutrition-grid">
+        ${known
+          .map(
+            (f) => `
+          <div class="product-page__nutrition-item">
+            <span class="product-page__nutrition-value">${formatQuantityLocal(f.value as number)} ${f.unit}</span>
+            <span class="product-page__nutrition-label">${f.label}</span>
+          </div>`
+          )
+          .join("")}
+      </div>
+    </div>`;
+}
+
+// Той самий підхід, що nutritionFactsHtml вище — блок повністю
+// зникає, якщо для товару рецепт не заповнено (composition: []),
+// замість порожнього заголовка "Склад" без вмісту.
+function compositionHtml(product: Product): string {
+  if (!product.composition.length) return "";
+
+  return `
+    <div class="product-page__spec">
+      <div class="product-page__spec-label">Склад</div>
+      <div class="product-page__spec-value">${product.composition.join(", ")}</div>
+    </div>`;
+}
+
+// Той самий підхід, що formatQuantity в адмінці — прибирає зайві
+// нулі після коми (12.0 → 12, 12.5 лишається 12.5), без залежності від
+// admin.ts.
+function formatQuantityLocal(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+}
+
 function renderProduct(root: HTMLElement, product: Product, id: string): void {
   document.title = `${product.name} – Є-Хатинка`;
 
@@ -124,7 +198,7 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
           </div>
         </div>
 
-        <div class="product-page__price">${product.price} ${CURRENCY}</div>
+        ${productPagePriceHtml(product)}
 
         <p class="product-page__description">${product.description}</p>
 
@@ -137,7 +211,10 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
             <div class="product-page__spec-label">Виробник</div>
             <div class="product-page__spec-value">${product.manufacturer}</div>
           </div>
+          ${compositionHtml(product)}
         </div>
+
+        ${nutritionFactsHtml(product)}
       </div>
     </div>
   `;
@@ -159,8 +236,16 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
   // ---- Обране: гарантовано лише для авторизованих ----
   const favoriteBtn = document.getElementById("product-page-favorite");
   if (favoriteBtn) {
-    // Початковий стан серця має сенс лише для вже залогіненого — інакше
-    // список бажаного йому ще не належить.
+    // Порожнє (неактивне) сердечко видно ЗАВЖДИ одразу — раніше
+    // renderFavoriteIcon викликався лише всередині перевірки сесії
+    // нижче, тож для гостя (немає сесії) кнопка лишалась зовсім
+    // порожньою: жодного SVG, "сердечко зникало". Контур сердечка —
+    // не привілей залогінених, лише його СТАН (закрашене/ні) залежить
+    // від сесії.
+    renderFavoriteIcon(favoriteBtn, false);
+
+    // Початковий "закрашений" стан серця має сенс лише для вже
+    // залогіненого — інакше список бажаного йому ще не належить.
     void (async () => {
       const session = await getSession();
       if (session) {
@@ -210,6 +295,11 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
           renderFavoriteIcon(favoriteBtn, await toggleFavorite(id));
         })();
       }
+      // Сервер під капотом мерджить гостьовий кошик у акаунтний при
+      // вході (getOrCreateCart в server.js) — перезапитуємо тут, щоб
+      // степпер на цій сторінці одразу показав акаунтну кількість.
+      resetCartCache();
+      void loadCart();
     });
     setupAuthModal();
   }
@@ -229,6 +319,9 @@ async function init(): Promise<void> {
   const id = params.get("id");
 
   await Promise.all([loadProducts(), new Promise((resolve) => window.setTimeout(resolve, SKELETON_DELAY_MS))]);
+  // Кошику потрібні вже завантажені PRODUCTS (для назви/ціни/емодзі) —
+  // тож тільки після loadProducts() вище, не в тому самому Promise.all.
+  await loadCart();
 
   const product = PRODUCTS.find((p) => p.id === id);
 
