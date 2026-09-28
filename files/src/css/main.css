@@ -569,6 +569,12 @@
   color: var(--color-text-muted);
 }
 
+.admin-order-status--pending {
+  background: #fdecd2;
+  color: #b5650a;
+  font-weight: 700;
+}
+
 .admin-order-status--delivering {
   background: #e3edfb;
   color: #1d5fbf;
@@ -675,6 +681,10 @@
 
 .admin-table-toolbar {
   margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 /* Обгортка потрібна лише для позиціювання кнопки "очистити" всередині
@@ -696,6 +706,26 @@
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   color: var(--color-text);
+}
+
+/* Комбобокс-фільтр поруч із пошуком (статус/категорія/тип операції
+   тощо) — той самий візуальний стиль, що .admin-table-search, щоб не
+   виглядало як два різних елементи керування поруч. */
+.admin-table-filter {
+  height: 42px;
+  min-width: 170px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.admin-table-filter:focus {
+  border-color: var(--color-accent);
 }
 
 .admin-search-wrap .admin-table-search {
@@ -978,7 +1008,7 @@
   font-weight: 600;
   color: var(--color-text-muted);
   padding: 0 var(--space-3) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-surface-muted);
   /* Без цього довгий заголовок ("Користувач" тощо) в затиснутій
      колонці на вузькому екрані не переносився й не обрізався, а просто
      малювався поверх сусідньої клітинки — виглядало як склеєні докупи
@@ -991,7 +1021,7 @@
 
 .admin-table td {
   padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-surface-muted);
   vertical-align: middle;
   font-size: var(--fs-sm);
 }
@@ -1113,6 +1143,12 @@
   background: var(--color-border);
   color: var(--color-text-muted);
   white-space: nowrap;
+  /* Без цього плашки з приглушеним фоном (--accent, за замовчуванням)
+     майже зливаються зі сторінковим фоном (обидва теплий беж, дуже
+     близькі відтінки) — найпомітніше було в "Методи оплати"
+     ("Основний"/"Додатковий"). Легка тінь дає відділення від фону
+     незалежно від конкретного кольору плашки. */
+  box-shadow: 0 1px 2px rgba(58, 42, 15, 0.12);
 }
 
 .admin-table__badge--accent {
@@ -1326,11 +1362,26 @@
     max-width: none;
   }
 
+  /* На десктопі toolbar — рядок (пошук + фільтри поруч), тут — колонка:
+     пошук зверху, кожен комбокс-фільтр під ним на всю ширину. */
+  .admin-table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-table-filter {
+    width: 100%;
+  }
+
   /* iOS Safari сам зумить сторінку при фокусі на будь-якому інпуті з
      font-size < 16px — саме тому був той "автозум" на полі пошуку.
      16px тут лишається лише на тач-екранах, щоб на десктопі поле не
      виглядало крупнішим за решту дрібного тексту таблиці. */
   .admin-table-search {
+    font-size: 16px;
+  }
+
+  .admin-table-filter {
     font-size: 16px;
   }
 }
@@ -1848,7 +1899,14 @@ body.has-open-user-menu .mobile-search {
 .auth-modal {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  /* Усі попапи на цих класах (вхід/реєстрація, підтвердження очищення
+     кошика, оформлення замовлення) мають відкриватись ПОВЕРХ мобільної
+     шторки кошика (.mobile-cart-sheet, z-index: 110) — на мобілці саме
+     звідти й відкривається більшість із них (кнопка "Оформити" в
+     шторці веде або одразу в checkout-modal, або, якщо гість не
+     залогінений, спершу в auth-modal — обидва мусять бути видно поверх
+     самої шторки, а не позаду неї). */
+  z-index: 120;
   /* visibility, а не display:none — інакше закриття не могло б
      анімуватись зовсім (display не транзишиниться). Той самий підхід,
      що вже був у мобільної шторки кошика й меню користувача. */
@@ -1857,19 +1915,6 @@ body.has-open-user-menu .mobile-search {
   align-items: center;
   justify-content: center;
   padding: var(--space-5);
-}
-
-/* Модалка підтвердження очищення кошика й модалка оформлення
-   замовлення використовують ті самі auth-modal класи (єдиний стиль
-   попапів), але відкриваються ПОВЕРХ уже відкритої мобільної шторки
-   кошика (z-index: 110) — тож їм потрібен вищий z-index, інакше вони
-   ховаються під шторкою. Той самий баг, що вже був пофіксений для
-   clear-cart-modal, спливав і в checkout-modal — на мобілці кнопка
-   "Оформити" живе саме в цій шторці, тож він відкривається рівно в тій
-   самій ситуації. */
-#clear-cart-modal,
-#checkout-modal {
-  z-index: 120;
 }
 
 .auth-modal--open {
@@ -2386,4 +2431,344 @@ body.has-open-user-menu .mobile-search {
     padding: var(--space-5);
     padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   }
+}
+
+/* ==============================
+   Сповіщення адміна про нові замовлення (src/ts/admin-notifications.ts).
+   ============================== */
+
+.admin-notif {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.admin-notif__bell {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease;
+}
+
+.admin-notif__bell-icon {
+  width: 20px;
+  height: 20px;
+  background-color: var(--color-accent-dark, #b5650a);
+  -webkit-mask-image: url(../../assets/icons/bell.png);
+  mask-image: url(../../assets/icons/bell.png);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-notif__bell:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.admin-notif-badge {
+  display: none;
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-error);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.admin-notif-badge--visible {
+  display: block;
+}
+
+.admin-sidebar__link .admin-notif-badge {
+  position: static;
+  display: none;
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+.admin-sidebar__link .admin-notif-badge--visible {
+  display: inline-block;
+}
+
+.admin-notif__backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 29, 20, 0.35);
+  z-index: 59;
+}
+
+.admin-notif__backdrop--visible {
+  display: block;
+}
+
+.admin-notif__panel {
+  display: none;
+  position: fixed;
+  top: 70px;
+  right: var(--space-5);
+  width: 320px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card), 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 60;
+}
+
+.admin-notif__panel--open {
+  display: block;
+}
+
+.admin-notif__head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-notif__close {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.admin-notif__empty {
+  padding: var(--space-5) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.admin-notif__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.admin-notif__item:last-child {
+  border-bottom: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-notif__item:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.admin-notif__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-notif__item-sub {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-notif__item-time {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ---- Тости в правому нижньому куті ---- */
+.admin-notif__toasts {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.admin-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 300px;
+  max-width: calc(100vw - var(--space-6));
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-left: 4px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card), 0 8px 24px rgba(0, 0, 0, 0.16);
+  color: var(--color-text);
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.admin-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.admin-toast__icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  background-color: #fff;
+  -webkit-mask-image: url(../../assets/icons/bell.png);
+  mask-image: url(../../assets/icons/bell.png);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  background-color: var(--color-accent);
+}
+
+.admin-toast__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+
+.admin-toast__body span {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .admin-notif__panel {
+    top: 50%;
+    left: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+    max-height: 70vh;
+    transform: translateY(-50%);
+    border-radius: var(--radius-lg);
+  }
+
+  .admin-notif__toasts {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: var(--space-3);
+  }
+
+  .admin-toast {
+    width: auto;
+  }
+}
+
+/* Рядок замовлення "Очікує обробки" — легкий теплий фон і смужка зліва,
+   щоб такі рядки впадали в очі одразу, без розкриття прев'ю. Смужка —
+   лише на ПЕРШІЙ клітинці рядка (:first-child), інакше box-shadow на
+   кожній td рядка малює вертикальну лінію на межі МІЖ КОЖНОЮ парою
+   колонок — виглядає як частокол розділювачів через увесь рядок. */
+.admin-table__row--pending td {
+  background: #fff8ec;
+}
+
+.admin-table__row--pending td:first-child {
+  box-shadow: inset 3px 0 0 0 #e0932e;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-table tbody tr.admin-table__row--pending:hover td {
+    background: #fef1da;
+  }
+}
+
+/* Короткий "спалах" рядка після переходу з повідомлення про нове
+   замовлення (admin-notifications.ts → openItem) — привертає око до
+   потрібного рядка серед списку. */
+@keyframes admin-row-flash {
+  0%, 100% { background: transparent; }
+  20%, 60% { background: #ffe6b8; }
+}
+
+.admin-table__row--flash td {
+  animation: admin-row-flash 1.5s ease-in-out;
+}
+
+/* ---- Дзвіночок сповіщень: тільки десктоп; мобільна адаптація ----
+   На вузьких екранах в топбарі й так тісно (аватар/меню), тож на
+   мобілці замість окремого дзвіночка — пункт "Сповіщення про
+   замовлення" всередині самого меню адміна (див. user-menu.ts). Ховаємо
+   саме КНОПКУ (не весь #admin-notif) — сама панель сповіщень тепер
+   лежить окремо від цього контейнера (сиблінгом хедера в admin.html)
+   саме для того, щоб приховування дзвіночка її не зачіпало. */
+@media (max-width: 640px) {
+  .admin-notif__bell {
+    display: none;
+  }
+}
+
+.user-menu__item--notif {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .user-menu__item--notif {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+}
+
+.user-menu__item--notif .admin-notif-badge {
+  position: static;
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+.user-menu__icon--notif {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-image: url(../../assets/icons/bell.png);
+  mask-image: url(../../assets/icons/bell.png);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }

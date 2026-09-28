@@ -151,17 +151,26 @@ export interface ApiAdminProductRecipeItem {
   quantity: number;
 }
 
-export interface ApiAdminIngredientMovement {
-  id: number;
+export interface ApiAdminIngredientMovementItem {
   ingredientId: number;
   ingredientName: string;
   ingredientUnit: string;
+  quantity: number;
+}
+
+export interface ApiAdminIngredientMovement {
+  id: number;
+  batchId: string | null;
+  ingredientId: number | null;
+  ingredientName: string | null;
+  ingredientUnit: string | null;
   productId: number | null;
   productName: string | null;
   movementType: string;
   quantity: number;
   comment: string | null;
   createdAt: number;
+  items: ApiAdminIngredientMovementItem[] | null;
 }
 
 export interface ApiAdminProductTagItem {
@@ -211,4 +220,179 @@ export interface ApiAdminOrderItem {
   productName: string;
   quantity: number;
   priceAtPurchase: number;
+}
+
+// ---- Аналітика (адмінка) і рекомендації (каталог) ----
+
+export type ForecastConfidence = "high" | "medium" | "low";
+
+export interface ApiForecastRow {
+  productId: number;
+  name: string;
+  categoryId: number;
+  categoryName: string;
+  perishable: boolean;
+  price: number;
+  stock: number;
+  status: string;
+  modelId: string | null;
+  modelName: string | null;
+  confidence: ForecastConfidence;
+  historyDays: number;
+  wape: number | null;
+  naiveWape: number | null;
+  sigma: number;
+  // Прогноз середнього попиту на кожен із наступних днів (шт.)
+  forecast: number[];
+  forecastWeek: number;
+  // Фактичні продажі за останні (до) 28 днів
+  recent: number[];
+}
+
+export interface ApiPlanDay {
+  date: string;
+  forecast: number;
+  target: number;
+  produce: number;
+  dayparts: Record<string, number>;
+}
+
+export interface ApiPlanRow {
+  productId: number;
+  name: string;
+  stock: number;
+  perishable: boolean;
+  criticalRatio: number;
+  days: ApiPlanDay[];
+}
+
+export type IngredientNeedStatus = "ok" | "low" | "critical" | "unused";
+
+export interface ApiIngredientNeed {
+  ingredientId: number;
+  name: string;
+  unit: string;
+  iconUrl: string | null;
+  stock: number;
+  perDay: number[];
+  needTomorrow: number;
+  needWeek: number;
+  shortageTomorrow: number;
+  shortageWeek: number;
+  status: IngredientNeedStatus;
+  lowStockThreshold: number | null;
+  belowThreshold: boolean;
+  usedInRecipes: boolean;
+}
+
+export type DiscountStatus = "overstock" | "slow" | "ok";
+export type DiscountAction = "apply" | "keep" | "remove" | "none";
+
+export interface ApiDiscountRow {
+  productId: number;
+  name: string;
+  perishable: boolean;
+  status: DiscountStatus;
+  action: DiscountAction;
+  currentDiscount: number;
+  suggestedDiscount: number;
+  price: number;
+  newPrice: number;
+  expectedUpliftPct: number;
+  reason: string;
+  metrics: {
+    stock: number;
+    shelfLifeDays: number;
+    sold7: number;
+    sold14: number;
+    velocity: number;
+    categoryMedian: number;
+    relativeVelocity: number;
+    forecastDaily: number;
+    daysOfCover: number | null;
+    excessUnits: number;
+    stillExcessUnits: number;
+    lifeDays: number;
+  };
+}
+
+export interface ApiModelSummary {
+  id: string;
+  name: string;
+  wape: number | null;
+  chosenCount: number;
+}
+
+export interface ApiDaypart {
+  id: string;
+  label: string;
+  from: number;
+  to: number;
+}
+
+export interface ApiAnalyticsReport {
+  generatedAt: number;
+  meta: {
+    historyDays: number;
+    firstDate: string | null;
+    lastDate: string | null;
+    totalUnits: number;
+    horizonDays: number;
+    productsTotal: number;
+    ingredientsTotal: number;
+    perishableMaxShelfDays: number;
+    costRatio: number;
+    priceElasticity: number;
+    dayparts: ApiDaypart[];
+    accuracy: {
+      wape: number | null;
+      naiveWape: number | null;
+      totalWape: number | null;
+      totalNaiveWape: number | null;
+      totalModel: string | null;
+    };
+    warnings: string[];
+  };
+  dates: Array<{ iso: string; dow: number }>;
+  historyDates: string[];
+  totals: {
+    history: number[];
+    forecast: Array<{ units: number; revenue: number }>;
+    produce: Array<{ units: number; dayparts: Record<string, number> }>;
+  };
+  forecast: ApiForecastRow[];
+  plan: ApiPlanRow[];
+  ingredients: ApiIngredientNeed[];
+  discounts: ApiDiscountRow[];
+  models: ApiModelSummary[];
+}
+
+export interface ApiOrderNotification {
+  id: number;
+  userFullName: string;
+  totalAmount: number;
+  itemsCount: number;
+  status: string;
+  createdAt: number;
+}
+
+export interface OrderNotificationsResult {
+  ok: boolean;
+  maxId: number;
+  orders: ApiOrderNotification[];
+  pendingOrders: ApiOrderNotification[];
+}
+
+export interface ApiStorefrontHighlights {
+  ok: boolean;
+  popular: number[];
+  promoted: number[];
+}
+
+export type RecommendationReason = "bought" | "others";
+
+export interface ApiRecommendation {
+  productId: number;
+  reason: RecommendationReason;
+  score: number;
 }

@@ -69,6 +69,57 @@ if (tableExists("ingredients") && !columnExists("ingredients", "icon_url")) {
   db.exec("ALTER TABLE ingredients ADD COLUMN icon_url TEXT;");
 }
 
+// Міграція ingredient_movements під "Приготування продукції": раніше
+// ingredient_id був обов'язковим (кожен рух — лише про інгредієнт),
+// тепер рух може бути і про сам продукт (ingredient_id = NULL,
+// "Списання продукції" чи приріст готової продукції від "Приготування").
+// Плюс batch_id — щоб згрупувати всі рядки ОДНІЄЇ операції
+// "Приготування" (списання кожного інгредієнта з рецепта + приріст
+// самого продукту) і видаляти/показувати їх як одну партію, а не купу
+// розрізнених рядків. SQLite не вміє ALTER COLUMN ... DROP NOT NULL
+// напряму, тож при старій схемі — пересоздаємо таблицю з копіюванням
+// даних (сама таблиця з'явилась щойно в цьому проєкті, тож втрати
+// історичних рухів тут не критичні, але дані на всякий випадок
+// зберігаємо, а не дропаємо).
+if (tableExists("ingredient_movements") && columnExists("ingredient_movements", "ingredient_id")) {
+  const col = db
+    .prepare("PRAGMA table_info(ingredient_movements)")
+    .all()
+    .find((c) => c.name === "ingredient_id");
+  const needsMigration = (col && col.notnull === 1) || !columnExists("ingredient_movements", "batch_id");
+  if (needsMigration) {
+    db.exec(`
+      CREATE TABLE ingredient_movements_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id TEXT,
+        ingredient_id INTEGER,
+        product_id INTEGER,
+        movement_type TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        comment TEXT,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      );
+    `);
+    // Старі типи (restock/waste/adjustment) переносимо на нові
+    // еквіваленти нового 4-операційного набору (adjustment як
+    // найближчий за змістом до "списання" мапимо в writeoff — цієї
+    // операції в новому UI вже нема, старих даних тут очікувано мало).
+    const remap = { restock: "ingredient_purchase", waste: "ingredient_writeoff", adjustment: "ingredient_writeoff" };
+    const oldRows = db.prepare("SELECT * FROM ingredient_movements").all();
+    const insert = db.prepare(
+      `INSERT INTO ingredient_movements_new (id, ingredient_id, product_id, movement_type, quantity, comment, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const r of oldRows) {
+      insert.run(r.id, r.ingredient_id, r.product_id, remap[r.movement_type] ?? r.movement_type, r.quantity, r.comment, r.created_at);
+    }
+    db.exec("DROP TABLE ingredient_movements;");
+    db.exec("ALTER TABLE ingredient_movements_new RENAME TO ingredient_movements;");
+  }
+}
+
 // Схема з ER-діаграми (users/sessions лишились як були — щоб не зламати
 // вже написані /api/register, /api/login тощо; role/expires_at додані
 // нові поля з діаграми). Всі інші таблиці — новий каталог/кошик/
@@ -228,7 +279,8 @@ db.exec(`
   -- (наприклад закупівля чи брак сировини самої по собі).
   CREATE TABLE IF NOT EXISTS ingredient_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ingredient_id INTEGER NOT NULL,
+    batch_id TEXT,
+    ingredient_id INTEGER,
     product_id INTEGER,
     movement_type TEXT NOT NULL,
     quantity REAL NOT NULL,

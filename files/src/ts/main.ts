@@ -2,7 +2,8 @@ import { getSession, logout } from "./storage.js";
 import { resetFavoritesCache } from "./favorites.js";
 import { resetCartCache, loadCart } from "./cart.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler } from "./auth-modal.js";
-import { setupCatalog, setSearchQuery } from "./catalog.js";
+import { setupCatalog, setSearchQuery, refreshRecommendations } from "./catalog.js";
+import { renderStorefrontHighlights } from "./storefront-highlights.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
 import { userMenuHtml, setupUserMenu } from "./user-menu.js";
 
@@ -349,6 +350,10 @@ async function render(): Promise<void> {
     return;
   }
 
+  // Персональні підписи в «Усіх товарах» — лише для авторизованого
+  // (гість скидає кеш, тож після виходу підписи зникають).
+  void refreshRecommendations(session !== null);
+
   if (session) {
     const firstName = session.fullName.split(" ")[0];
 
@@ -448,4 +453,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   setupAuthModal();
   setupCatalog();
+  void renderStorefrontHighlights();
 });

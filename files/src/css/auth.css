@@ -122,6 +122,21 @@
   margin-bottom: var(--space-2);
 }
 
+/* "Буде списано з рецепта" у модалці "Рух інгредієнтів" (операція
+   "Приготування") — той самий лейбл-стиль, що .field label, але це не
+   справжній <label> (нема пов'язаного інпута), тому окремий клас. */
+.field-note-label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.admin-movement-recipe-empty {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
 .field input[type="text"],
 .field input[type="email"],
 .field input[type="tel"],

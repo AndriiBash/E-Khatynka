@@ -2,6 +2,13 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
+  <!-- Цю сторінку сервер віддає (server.js, catch-all) для БУДЬ-ЯКОГО
+       невідомого шляху — адреса в браузері лишається, наприклад,
+       "/якийсь/шлях/", а не змінюється на "/404.html". Без <base> усі
+       відносні посилання нижче (assets/..., src/css/...) резолвились
+       би відносно ТІЄЇ адреси, а не кореня сайту, і 404 віддавалась би
+       без стилів/іконок. -->
+  <base href="/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />

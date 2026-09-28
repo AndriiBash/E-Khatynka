@@ -63,6 +63,7 @@ app.use(require("./src/server/routes/paymentMethods"));
 app.use(require("./src/server/routes/products"));
 app.use(require("./src/server/routes/cartsAdmin"));
 app.use(require("./src/server/routes/adminMeta"));
+app.use(require("./src/server/routes/analytics"));
 
 // Для будь-якого невідомого шляху без розширення файлу (тобто це не
 // запит до /dist, /src, /assets тощо) — 404.html, той самий підхід, що

@@ -28,6 +28,7 @@ export interface Product {
   fats: number | null;
   carbohydrates: number | null;
   composition: string[];
+  tags: string[];
   stockQuantity: number;
 }
 
@@ -49,6 +50,7 @@ interface ApiPublicProduct {
   imageUrl: string | null;
   stockQuantity: number;
   tagIds: number[];
+  tags?: string[];
   composition: string[];
 }
 
@@ -89,6 +91,7 @@ function mapApiProduct(p: ApiPublicProduct): Product {
     fats: p.fats,
     carbohydrates: p.carbohydrates,
     composition: p.composition ?? [],
+    tags: p.tags ?? [],
     stockQuantity: p.stockQuantity,
   };
 }

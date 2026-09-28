@@ -22,6 +22,26 @@
     <div class="preloader__mark"><span class="logo-accent">Є-</span>Хатинка<span class="preloader__mark-dot">.</span></div>
     <div class="preloader__bar"><div class="preloader__bar-fill"></div></div>
   </div>
+  <script>
+    // Прелоадер має показуватись лише при справжньому першому заході на
+    // сторінку чи ручному оновленні (F5) — а не щоразу, коли юзер тисне
+    // "назад" у браузері (напр. повернувся з product.html у каталог).
+    // Navigation Timing API дає це напряму (nav.type === "back_forward"),
+    // на відміну від bfcache (pageshow.persisted), який спрацьовує лише
+    // якщо сторінку взагалі можна закешувати — тут перевірка надійніша.
+    // Синхронний скрипт одразу після preloader у розмітці — щоб встигнути
+    // прибрати оверлей ДО першого пофарбування, без "блимання".
+    (function () {
+      var nav = performance.getEntriesByType("navigation")[0];
+      var isBackForward = nav
+        ? nav.type === "back_forward"
+        : performance.navigation && performance.navigation.type === 2;
+      if (isBackForward) {
+        var el = document.getElementById("preloader");
+        if (el) el.remove();
+      }
+    })();
+  </script>
 
   <div class="stub">
     <header class="stub__topbar">
@@ -60,11 +80,11 @@
             <img class="categories-sidebar__decor-heart" src="assets/icons/heart.png" alt="" aria-hidden="true" onerror="this.remove()" />
           </div>
         </aside>
-        </aside>
 
         <section class="products-section">
           <h1 id="greeting">Ласкаво просимо до Є-Хатинки</h1>
           <p id="hero-subtitle">Свіжа випічка щодня — обирайте категорію зліва або гортайте весь каталог.</p>
+          <div id="storefront-highlights"></div>
           <div class="products-grid" id="products-grid"></div>
         </section>
 

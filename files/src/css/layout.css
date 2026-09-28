@@ -116,6 +116,14 @@
   margin: 0 0 var(--space-5);
 }
 
+.products-section {
+  /* Без цього grid-трек .layout під цю секцію не стискається нижче
+     "природної" ширини вмісту (дефолт grid-item — min-width: auto) —
+     коли карток стає багато, трек розпирає весь .layout і правий
+     .cart-panel вилазить за межі екрана. */
+  min-width: 0;
+}
+
 .products-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -206,11 +214,16 @@
 }
 
 /* Знижка — бейдж поверх фото + стара/нова ціна поряд, той самий
-   принцип "закреслена стара, жирна нова", що на референсах маркетів. */
+   принцип "закреслена стара, жирна нова", що на референсах маркетів.
+   Стоїть у тому ж кутку, що й бейдж рекомендації (зліва зверху) — якщо
+   обидва є на одній картці, знижка йде ДРУГИМ рядком під ним
+   (.product-card__badge--stacked), а не поверх нього. Раніше цей
+   бейдж стояв знизу зліва — там-таки, де розкривається степпер "−/+",
+   і степпер лягав прямо поверх нього; тепер такого перетину нема. */
 .product-card__badge {
   position: absolute;
   left: var(--space-2);
-  bottom: var(--space-2);
+  top: var(--space-2);
   padding: var(--space-1) var(--space-2);
   border-radius: 999px;
   background: var(--color-error);
@@ -218,6 +231,36 @@
   font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
+}
+
+.product-card__badge--stacked {
+  top: calc(var(--space-2) + 28px);
+}
+
+/* Персональний підпис рекомендації (лише для авторизованого, у «Усіх
+   товарах»): зліва зверху на фото. Кнопка «+»/степпер лишається знизу
+   праворуч — цей кут вільний завжди. */
+.product-card__reco {
+  position: absolute;
+  left: var(--space-2);
+  top: var(--space-2);
+  max-width: calc(100% - var(--space-4));
+  padding: 5px var(--space-2);
+  border-radius: 999px;
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.15;
+  box-shadow: 0 1px 4px rgba(43, 29, 20, 0.28);
+  pointer-events: none;
+}
+
+.product-card__reco--bought {
+  background: var(--color-accent);
+}
+
+.product-card__reco--others {
+  background: var(--color-secondary);
 }
 
 .product-card__price-row {
@@ -1090,4 +1133,83 @@ body.has-open-user-menu .mobile-cart-button {
   color: rgba(255, 255, 255, 0.5);
   max-width: 480px;
   line-height: 1.6;
+}
+
+/* ==============================
+   Публічні рядки-каруселі на вітрині (src/ts/storefront-highlights.ts):
+   «Популярне зараз» і «Акційні пропозиції». Ті самі .product-card, що
+   й у гріді нижче — просто інший добір і горизонтальна прокрутка.
+   ============================== */
+
+.highlights-row {
+  margin-bottom: var(--space-6);
+}
+
+.highlights-row.is-hidden,
+#storefront-highlights.is-hidden {
+  display: none;
+}
+
+.highlights-row__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+  /* Один і той самий колір для обох рядків («Популярне зараз» і
+     «Акційні пропозиції») — раніше акційний був підфарбований окремо
+     й вирізнявся серед іншого, тепер обидва однакові. */
+  color: var(--color-accent-dark, #b5650a);
+}
+
+.highlights-row__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-block;
+  background-color: currentColor;
+  /* mask-image: url(...) саме тут не задається — кожен рядок
+     («Популярне зараз»/«Акційні пропозиції») підставляє свою іконку
+     напряму в inline style="" (дивись rowHtml у
+     storefront-highlights.ts). Раніше йшло через CSS custom property
+     (var(--highlights-icon)), але Safari не резолвить відносний url(),
+     переданий через custom property, у mask-image — рендерилось пусто. */
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.highlights-row__scroll {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  /* overflow-x: auto неявно вмикає й overflow-y: auto — тінь картки
+     (--shadow-card, це ~22px розмиття знизу) інакше обрізається по
+     нижньому краю контейнера. var(--space-2) було замало, тінь
+     впиралась у видиму межу. */
+  padding: var(--space-1) 0 var(--space-5);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.highlights-row__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.highlights-row__scroll .product-card {
+  flex: 0 0 auto;
+  width: 190px;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 640px) {
+  .highlights-row__scroll .product-card {
+    width: 150px;
+  }
 }

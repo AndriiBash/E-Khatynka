@@ -177,6 +177,66 @@ function toAdminOrder(row) {
   };
 }
 
+// Легкий поллінг для сповіщень адміна про нові замовлення (без товарних
+// позицій — щоб опитувати раз на 15 секунд і не ганяти зайві дані).
+// afterId=0 (або відсутній) при першому виклику з такого пристрою поверне
+// лише maxId, без списку "нових" — щоб при відкритті адмінки не сипались
+// сповіщення про всю історію замовлень.
+function toNotificationRow(row) {
+  return {
+    id: row.id,
+    userFullName: row.user_full_name || row.user_email || "—",
+    totalAmount: row.total_amount,
+    itemsCount: row.items_count,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+const NOTIFICATION_ROW_SQL = `
+  SELECT o.id, o.total_amount, o.created_at, o.status,
+         u.full_name AS user_full_name, u.email AS user_email,
+         (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS items_count
+  FROM orders o
+  JOIN users u ON u.id = o.user_id
+`;
+
+// Поллінг для сповіщень адміна про замовлення (admin-notifications.ts).
+// Повертає ДВІ незалежні речі, а не одну:
+//   • newOrders   — замовлення з id > afterId: лише вони показуються
+//     як "жива" сплив-картка + звук (щось з'явилось прямо зараз, поки
+//     адмін тут). При afterId=0 (перший візит на цьому пристрої) —
+//     порожньо, щоб не сипати сповіщеннями про всю історію одразу.
+//   • pendingOrders — УСІ замовлення зі статусом "Очікує обробки"
+//     просто зараз, незалежно від afterId. Раніше лічильник на
+//     дзвіночку рахував лише "нове з останнього разу", і через це
+//     замовлення, що вже існували ДО першого відкриття адмінки
+//     (типовий випадок — щойно розгорнули проєкт, а тестові
+//     замовлення вже в базі), НІКОЛИ не потрапляли в бейдж чи панель —
+//     виглядало так, наче сповіщення "взагалі не працюють". Бейдж і
+//     панель тепер завжди показують реальний бэклог необроблених
+//     замовлень, а не лише "щойно виниклі".
+router.get("/api/admin/orders/notifications", requireAdmin, (req, res) => {
+  const afterId = Number(req.query.afterId) || 0;
+  const maxRow = db.prepare("SELECT COALESCE(MAX(id), 0) AS maxId FROM orders").get();
+  const maxId = maxRow.maxId;
+
+  let newOrders = [];
+  if (afterId > 0 && maxId > afterId) {
+    newOrders = db
+      .prepare(`${NOTIFICATION_ROW_SQL} WHERE o.id > ? ORDER BY o.id ASC LIMIT 50`)
+      .all(afterId)
+      .map(toNotificationRow);
+  }
+
+  const pendingOrders = db
+    .prepare(`${NOTIFICATION_ROW_SQL} WHERE o.status = 'pending' ORDER BY o.id DESC LIMIT 50`)
+    .all()
+    .map(toNotificationRow);
+
+  res.json({ ok: true, maxId, orders: newOrders, pendingOrders });
+});
+
 router.get("/api/admin/orders", requireAdmin, (req, res) => {
   const rows = db
     .prepare(

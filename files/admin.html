@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="src/css/tokens.css" />
   <link rel="stylesheet" href="src/css/preloader.css" />
   <link rel="stylesheet" href="src/css/main.css" />
+  <link rel="stylesheet" href="src/css/analytics.css" />
   <link rel="stylesheet" href="src/css/layout.css" />
   <link rel="stylesheet" href="src/css/auth.css" />
 </head>
@@ -22,6 +23,18 @@
     <div class="preloader__mark"><span class="logo-accent">Є-</span>Хатинка<span class="preloader__mark-dot">.</span></div>
     <div class="preloader__bar"><div class="preloader__bar-fill"></div></div>
   </div>
+  <script>
+    (function () {
+      var nav = performance.getEntriesByType("navigation")[0];
+      var isBackForward = nav
+        ? nav.type === "back_forward"
+        : performance.navigation && performance.navigation.type === 2;
+      if (isBackForward) {
+        var el = document.getElementById("preloader");
+        if (el) el.remove();
+      }
+    })();
+  </script>
 
   <div class="stub">
     <header class="stub__topbar">
@@ -33,8 +46,29 @@
         </span>
       </a>
       <div class="stub__topbar-spacer"></div>
+      <div class="admin-notif" id="admin-notif">
+        <button class="admin-notif__bell" id="admin-notif-bell" type="button" aria-label="Сповіщення про замовлення">
+          <span class="admin-notif__bell-icon" aria-hidden="true"></span>
+          <span class="admin-notif-badge" id="admin-notif-badge"></span>
+        </button>
+      </div>
       <div id="auth-slot"></div>
     </header>
+    <!-- Панель сповіщень — навмисно НЕ всередині .admin-notif: у мобільній
+         адаптації сам дзвіночок (кнопка вище) ховається (замість нього —
+         пункт меню адміна), і якби панель лежала в тому самому контейнері
+         з display:none, вона ховалась би разом з ним, хоча відкривати її
+         тепер можна і без дзвіночка. Бекдроп — лише для мобільної подачі
+         "як модалка"; на десктопі він непомітний (панель там — звичайний
+         випадний дропдаун біля дзвіночка, дивись CSS). -->
+    <div class="admin-notif__backdrop" id="admin-notif-backdrop"></div>
+    <div class="admin-notif__panel" id="admin-notif-panel">
+      <div class="admin-notif__head">
+        Нові замовлення
+        <button class="admin-notif__close" id="admin-notif-close" type="button" aria-label="Закрити">✕</button>
+      </div>
+    </div>
+    <div class="admin-notif__toasts" id="admin-notif-toasts"></div>
 
     <div class="admin-layout">
       <nav class="admin-sidebar" id="admin-sidebar">
@@ -61,6 +95,7 @@
         <a class="admin-sidebar__link" href="#/table/orders" data-nav="orders">
           <span class="admin-sidebar__icon admin-sidebar__icon--orders" aria-hidden="true"></span>
           Замовлення
+          <span class="admin-notif-badge" id="admin-orders-nav-badge"></span>
         </a>
 
         <div class="admin-sidebar__group">
@@ -342,34 +377,39 @@
           <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <h2 id="admin-movement-modal-title">Додати рух інгредієнта</h2>
+      <h2 id="admin-movement-modal-title">Додати рух</h2>
       <form id="admin-movement-form" novalidate>
         <div class="field">
+          <label for="admin-movement-type">Операція</label>
+          <select id="admin-movement-type" name="movementType">
+            <option value="ingredient_purchase">Закупівля інгредієнтів</option>
+            <option value="ingredient_writeoff">Списання інгредієнтів</option>
+            <option value="product_writeoff">Списання продукції</option>
+            <option value="production">Приготування продукції</option>
+          </select>
+        </div>
+        <div class="field" id="admin-movement-ingredient-field">
           <label for="admin-movement-ingredient">Інгредієнт</label>
           <select id="admin-movement-ingredient" name="ingredientId">
             <option value="">Завантаження…</option>
           </select>
           <span class="field-error" id="admin-movement-ingredient-error"></span>
         </div>
-        <div class="field">
-          <label for="admin-movement-type">Тип руху</label>
-          <select id="admin-movement-type" name="movementType">
-            <option value="restock">Поповнення (закупівля)</option>
-            <option value="production">Списано на виробництво</option>
-            <option value="waste">Списання браку</option>
-            <option value="adjustment">Ручне коригування</option>
-          </select>
-        </div>
         <div class="field" id="admin-movement-product-field">
-          <label for="admin-movement-product">Продукт (необов'язково)</label>
+          <label for="admin-movement-product" id="admin-movement-product-label">Продукт</label>
           <select id="admin-movement-product" name="productId">
-            <option value="">— Не пов'язано з продуктом —</option>
+            <option value="">Завантаження…</option>
           </select>
+          <span class="field-error" id="admin-movement-product-error"></span>
         </div>
         <div class="field">
           <label for="admin-movement-quantity" id="admin-movement-quantity-label">Кількість</label>
           <input type="text" inputmode="decimal" id="admin-movement-quantity" name="quantity" autocomplete="off" placeholder="Наприклад, 10" />
           <span class="field-error" id="admin-movement-quantity-error"></span>
+        </div>
+        <div class="field" id="admin-movement-recipe-preview-field" hidden>
+          <span class="field-note-label">Буде списано з рецепта:</span>
+          <div id="admin-movement-recipe-preview"></div>
         </div>
         <div class="field">
           <label for="admin-movement-comment">Коментар (необов'язково)</label>

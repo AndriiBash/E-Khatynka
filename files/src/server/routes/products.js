@@ -45,6 +45,9 @@ function toPublicProduct(row) {
     imageUrl: row.image_url,
     stockQuantity: row.stock_quantity,
     tagIds: getProductTagIds(row.id),
+    // Назви тегів для чіпів на картці товару (вітрина); tagIds лишається
+    // для адмінки/рекомендера.
+    tags: getProductTagNames(row.id),
     composition: getProductRecipes(row.id).map((r) => r.ingredientName),
   };
 }
@@ -52,6 +55,75 @@ function toPublicProduct(row) {
 router.get("/api/products", (req, res) => {
   const rows = db.prepare("SELECT * FROM products ORDER BY name ASC").all();
   res.json({ products: rows.map(toPublicProduct) });
+});
+
+// ---- Публічні "підказки" на вітрину: без авторизації, показуються
+// усім (на відміну від персональних бейджів "Ви брали раніше"/"Це
+// беруть також інші" — ті лише для залогінених, дивись
+// routes/analytics.js). Два незалежні простих механізми:
+//   • popular  — бестселери за останні 30 днів (за проданою
+//     кількістю), із доповненням із продажів за весь час, якщо свіжої
+//     історії замало (щойно запущений магазин);
+//   • promoted — товари з активною знижкою (виставленою вручну або з
+//     вкладки "Знижки" в адмінській аналітиці), найбільша знижка
+//     спершу — це і є "адміністративні рекомендації" з диплому:
+//     керована людиною пріоритизація акційних/неліквідних позицій.
+const HIGHLIGHTS_LIMIT = 10;
+const HIGHLIGHTS_RECENT_DAYS = 30;
+
+router.get("/api/products/highlights", (req, res) => {
+  const cutoff = Date.now() - HIGHLIGHTS_RECENT_DAYS * 24 * 60 * 60 * 1000;
+
+  const recent = db
+    .prepare(
+      `SELECT oi.product_id AS id, SUM(oi.quantity) AS qty
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       WHERE o.status != 'cancelled' AND o.created_at >= ? AND p.stock_quantity > 0
+       GROUP BY oi.product_id
+       ORDER BY qty DESC, oi.product_id ASC
+       LIMIT ?`
+    )
+    .all(cutoff, HIGHLIGHTS_LIMIT)
+    .map((r) => r.id);
+
+  let popular = recent;
+  if (popular.length < HIGHLIGHTS_LIMIT) {
+    const allTime = db
+      .prepare(
+        `SELECT oi.product_id AS id, SUM(oi.quantity) AS qty
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         JOIN products p ON p.id = oi.product_id
+         WHERE o.status != 'cancelled' AND p.stock_quantity > 0
+         GROUP BY oi.product_id
+         ORDER BY qty DESC, oi.product_id ASC
+         LIMIT ?`
+      )
+      .all(HIGHLIGHTS_LIMIT)
+      .map((r) => r.id);
+    const seen = new Set(popular);
+    for (const id of allTime) {
+      if (popular.length >= HIGHLIGHTS_LIMIT) break;
+      if (!seen.has(id)) {
+        popular.push(id);
+        seen.add(id);
+      }
+    }
+  }
+
+  const promoted = db
+    .prepare(
+      `SELECT id FROM products
+       WHERE discount_percent > 0 AND stock_quantity > 0
+       ORDER BY discount_percent DESC, id ASC
+       LIMIT ?`
+    )
+    .all(HIGHLIGHTS_LIMIT)
+    .map((r) => r.id);
+
+  res.json({ ok: true, popular, promoted });
 });
 
 // ---- Адмінка
@@ -102,6 +174,16 @@ function getProductTagIds(productId) {
     .prepare("SELECT tag_id FROM product_tags WHERE product_id = ?")
     .all(productId)
     .map((r) => r.tag_id);
+}
+
+function getProductTagNames(productId) {
+  return db
+    .prepare(
+      `SELECT t.name FROM product_tags pt JOIN tags t ON t.id = pt.tag_id
+       WHERE pt.product_id = ? ORDER BY t.id ASC`
+    )
+    .all(productId)
+    .map((r) => r.name);
 }
 
 function toProductFull(row) {

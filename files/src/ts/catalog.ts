@@ -17,12 +17,52 @@ import {
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
 import { setupSwipeToClose } from "./swipe-sheet.js";
 import { openAuthModal } from "./auth-modal.js";
+import {
+  loadRecommendations,
+  resetRecommendations,
+  getRecommendation,
+  hasRecommendations,
+  RECOMMENDATION_LABELS,
+} from "./recommendations.js";
 
 const CURRENCY = "₴";
 
 let activeCategory = "all";
 let searchQuery = "";
 let dynamicCategories: ApiCategory[] = [];
+
+// Перший рендер карток вже відбувся (після скелетонів). Потрібен, щоб
+// refreshRecommendations() не малював порожній грід («Нічого не
+// знайдено») раніше, ніж завантажились самі товари.
+let catalogRendered = false;
+
+// Персональні підписи («Ви брали раніше» / «Це беруть також інші») й
+// підйом рекомендованих товарів угору показуємо лише у вкладці «Усі
+// товари» й без пошуку — у категоріях і пошуку людина вже сама
+// вказала, що шукає.
+function showRecommendations(): boolean {
+  return activeCategory === "all" && searchQuery.trim().length === 0 && hasRecommendations();
+}
+
+// «Ви брали раніше» → «Це беруть також інші» → решта каталогу в
+// звичному порядку. Усередині груп зберігається порядок сервера (за
+// релевантністю). Повертає НОВИЙ масив — PRODUCTS не мутуємо.
+function sortByRecommendations(list: Product[]): Product[] {
+  const groupOrder = { bought: 0, others: 1 } as const;
+  const keyed = list.map((p, index) => {
+    const reco = getRecommendation(p.id);
+    return { p, index, group: reco ? groupOrder[reco.reason] : 2, rank: reco?.rank ?? 0 };
+  });
+  keyed.sort((a, b) => a.group - b.group || a.rank - b.rank || a.index - b.index);
+  return keyed.map((k) => k.p);
+}
+
+function recommendationBadgeHtml(p: Product): string {
+  if (!showRecommendations()) return "";
+  const reco = getRecommendation(p.id);
+  if (!reco) return "";
+  return `<span class="product-card__reco product-card__reco--${reco.reason}">${RECOMMENDATION_LABELS[reco.reason]}</span>`;
+}
 
 function categoryIconHtml(iconUrl: string | null): string {
   if (!iconUrl) return "";
@@ -48,7 +88,11 @@ function renderCategories(): void {
   // "Усі товари" — псевдокатегорія, живе лише на клієнті (немає рядка
   // в БД), решта — те, що адмін реально додав через /api/admin/categories.
   const items: Array<{ id: string; name: string; iconUrl: string | null }> = [
-    { id: "all", name: "Усі товари", iconUrl: null },
+    // Іконку для цієї вкладки поки не намальовано — покласти файл сюди:
+    // assets/icons/categories/all.png (та сама вимога, що й до інших
+    // іконок категорій: невеликий квадратний PNG, обробиться так само
+    // через <img>, окреме фарбування/maskbg не потрібне).
+    { id: "all", name: "Усі товари", iconUrl: "assets/icons/categories/all.png" },
     ...dynamicCategories.map((c) => ({ id: String(c.id), name: c.name, iconUrl: c.iconUrl })),
   ];
 
@@ -99,10 +143,14 @@ async function loadCategories(): Promise<void> {
 
 function productImageHtml(p: Product): string {
   if (p.imageUrl) {
-    // onerror — та сама страховка, що й іконки категорій/тегів в
-    // адмінці: бита чи ще не завантажена картинка не лишає порожню
-    // рамку, просто відкочується до емодзі-заглушки.
-    return `<img class="product-card__photo" src="${p.imageUrl}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-card__image', textContent: '${p.emoji}'}))" />`;
+    // onload/onerror знімають клас "skeleton" з батьківського
+    // .product-card__image-wrap — доти на ньому крутиться той самий
+    // shimmer, що і в скелетонах каталогу (tokens.css), тільки для
+    // ОДНІЄЇ картинки, а не всієї картки. onerror — та сама страховка,
+    // що й іконки категорій/тегів в адмінці: бита чи ще не завантажена
+    // картинка не лишає порожню рамку, просто відкочується до
+    // емодзі-заглушки.
+    return `<img class="product-card__photo" src="${p.imageUrl}" alt="" loading="lazy" onload="this.parentElement.classList.remove('skeleton')" onerror="this.parentElement.classList.remove('skeleton'); this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-card__image', textContent: '${p.emoji}'}))" />`;
   }
   return `<div class="product-card__image" aria-hidden="true">${p.emoji}</div>`;
 }
@@ -118,19 +166,21 @@ function productPriceHtml(p: Product): string {
   return `<div class="product-card__price">${p.price} ${CURRENCY}</div>`;
 }
 
-function discountBadgeHtml(p: Product): string {
+function discountBadgeHtml(p: Product, stacked: boolean): string {
   if (p.discountPercent > 0 && p.originalPrice > p.price) {
-    return `<span class="product-card__badge">−${p.discountPercent}%</span>`;
+    return `<span class="product-card__badge${stacked ? " product-card__badge--stacked" : ""}">−${p.discountPercent}%</span>`;
   }
   return "";
 }
 
-function productCardHtml(p: Product): string {
+export function productCardHtml(p: Product): string {
+  const recoHtml = recommendationBadgeHtml(p);
   return `
     <article class="product-card" data-product-id="${p.id}">
-      <div class="product-card__image-wrap">
+      <div class="product-card__image-wrap${p.imageUrl ? " skeleton" : ""}">
         ${productImageHtml(p)}
-        ${discountBadgeHtml(p)}
+        ${recoHtml}
+        ${discountBadgeHtml(p, recoHtml !== "")}
         <div class="product-card__control">
           <button class="product-card__plus" type="button" data-add="${p.id}" aria-label="Додати">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -175,7 +225,7 @@ function removeFromCartAnimated(id: string): void {
   window.setTimeout(() => setQty(id, 0), EXIT_ANIMATION_MS);
 }
 
-function bindProductCardEvents(grid: HTMLElement): void {
+export function bindProductCardEvents(grid: HTMLElement): void {
   // Один делегований listener на весь грід замість querySelectorAll+
   // addEventListener на кожен елемент — раніше цю функцію викликали
   // заново після КОЖНОГО renderProducts() (у тому числі на кожне
@@ -247,7 +297,7 @@ function bindProductCardEvents(grid: HTMLElement): void {
 // стану, щойно кількість знову менша за залишок (наприклад, після
 // зменшення степпером) — цей стан рахується наново при кожному виклику,
 // а не встановлюється один раз, тож "забути повернути" йому нема як.
-function syncProductControls(items: CartItem[]): void {
+export function syncProductControls(items: CartItem[]): void {
   document.querySelectorAll<HTMLElement>(".product-card").forEach((card) => {
     const id = card.dataset.productId;
     if (!id) return;
@@ -314,6 +364,26 @@ function reconcileProductCards(grid: HTMLElement, newHtml: string): void {
       if (oldInfo && newInfo && oldInfo.innerHTML !== newInfo.innerHTML) {
         oldInfo.innerHTML = newInfo.innerHTML;
       }
+      // Підпис рекомендації живе на самому фото, а не в інфо-блоці, тож
+      // синхронізуємо його окремо — без пересоздання <img>.
+      const oldReco = oldCard.querySelector(".product-card__reco");
+      const newReco = newCard.querySelector(".product-card__reco");
+      if ((oldReco?.outerHTML ?? "") !== (newReco?.outerHTML ?? "")) {
+        oldReco?.remove();
+        if (newReco) oldCard.querySelector(".product-card__image-wrap")?.appendChild(newReco);
+      }
+      // Бейдж знижки — так само окремо: чи є він узагалі, чи має бути
+      // "зсунутий" під бейдж рекомендації (.product-card__badge--stacked)
+      // залежить від того, з'явився/зник саме reco-бейдж вище — а це
+      // могло статись і ПІСЛЯ першого рендеру картки (рекомендації
+      // довантажуються асинхронно), тож без цього блоку стара картка
+      // назавжди лишалась би зі знижкою на невірному місці.
+      const oldBadge = oldCard.querySelector(".product-card__badge");
+      const newBadge = newCard.querySelector(".product-card__badge");
+      if ((oldBadge?.outerHTML ?? "") !== (newBadge?.outerHTML ?? "")) {
+        oldBadge?.remove();
+        if (newBadge) oldCard.querySelector(".product-card__image-wrap")?.appendChild(newBadge);
+      }
     } else {
       grid.insertBefore(newCard, refNode);
     }
@@ -331,13 +401,22 @@ function renderProducts(): void {
   const query = searchQuery.trim().toLowerCase();
   let filtered: Product[];
 
+  // «Популярне зараз»/«Акційні пропозиції» (storefront-highlights.ts) —
+  // лише на вкладці «Усі товари» без активного пошуку: в межах однієї
+  // категорії чи серед результатів пошуку ці рядки лише плутають, бо
+  // показують товари з-поза поточної вибірки.
+  document
+    .getElementById("storefront-highlights")
+    ?.classList.toggle("is-hidden", !(activeCategory === "all" && query.length === 0));
+
   if (query) {
     // Пошук іде по ВСІХ товарах, незалежно від обраної категорії —
     // логічно, що людина, яка щось шукає, хоче побачити геть усі
     // збіги, а не тільки в межах поточної вкладки.
-    filtered = PRODUCTS.filter((p) => p.name.toLowerCase().includes(query));
+    filtered = PRODUCTS.filter((p) => p.stockQuantity > 0 && p.name.toLowerCase().includes(query));
   } else {
-    filtered = activeCategory === "all" ? PRODUCTS : PRODUCTS.filter((p) => p.category === activeCategory);
+    filtered = PRODUCTS.filter((p) => p.stockQuantity > 0 && (activeCategory === "all" || p.category === activeCategory));
+    if (showRecommendations()) filtered = sortByRecommendations(filtered);
   }
 
   // ВАЖЛИВО: перевіряємо саме [data-product-id], а не просто
@@ -922,7 +1001,11 @@ async function submitCheckout(): Promise<void> {
   clearCart();
   // І перезапитуємо каталог — сервер щойно списав куплену кількість зі
   // складу, дивись коментар біля refreshProducts() у products.ts.
-  void refreshProducts().then(() => syncProductControls(getCartItems()));
+  // Після замовлення оновлюємо й «Ви брали раніше» — воно щойно змінилось.
+  void refreshProducts().then(async () => {
+    syncProductControls(getCartItems());
+    await refreshRecommendations(true);
+  });
 
   const successText = document.getElementById("checkout-success-text");
   if (successText) {
@@ -951,7 +1034,26 @@ function setupCheckoutModal(): void {
   });
 }
 
+// Викликається з main.ts на кожну зміну стану авторизації (вхід, вихід,
+// перше завантаження) і після оформлення замовлення. Гостю запит навіть
+// не робимо — рекомендації лише для авторизованого користувача.
+export async function refreshRecommendations(loggedIn: boolean): Promise<void> {
+  if (loggedIn) {
+    await loadProducts();
+    await loadRecommendations();
+  } else {
+    resetRecommendations();
+  }
+  if (catalogRendered) renderProducts();
+}
+
 export function setupCatalog(): void {
+  // user-menu.ts (модалка «Що вам подобається?») шле цю подію після
+  // збереження тегу — перезапитуємо рекомендації й перемальовуємо каталог
+  // одразу, без перезавантаження сторінки.
+  document.addEventListener("recommendations:refresh", () => {
+    void refreshRecommendations(true);
+  });
   renderCategories();
   void loadCategories();
   // Спочатку — скелетони з "переливом" (як у YouTube/Яндекс Лавці), і
@@ -962,6 +1064,7 @@ export function setupCatalog(): void {
     void (async () => {
       await loadProducts();
       renderProducts();
+      catalogRendered = true;
     })();
   }, SKELETON_DELAY_MS);
   // Кошик не залежить від скелетон-паузи каталогу — тягнемо одразу,

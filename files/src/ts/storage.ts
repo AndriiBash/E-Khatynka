@@ -17,6 +17,10 @@ import type {
   ApiOrder,
   ApiAdminOrder,
   ApiAdminOrderItem,
+  ApiAnalyticsReport,
+  ApiRecommendation,
+  OrderNotificationsResult,
+  ApiStorefrontHighlights,
 } from "./types.js";
 
 // ==============================
@@ -573,9 +577,9 @@ export type IngredientMovementResult =
   | { ok: false; error: string };
 
 export interface IngredientMovementInput {
-  ingredientId: number;
-  productId: number | null;
   movementType: string;
+  ingredientId: number | null;
+  productId: number | null;
   quantity: number;
   comment: string;
 }
@@ -1007,5 +1011,75 @@ export async function deleteAdminOrderItem(id: number): Promise<DeleteResult> {
     return (await res.json()) as DeleteResult;
   } catch {
     return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ---- Аналітика (лише адмін) ----
+
+export type AnalyticsReportResult = { ok: true; report: ApiAnalyticsReport } | { ok: false; error: string };
+
+export async function getAnalyticsReport(): Promise<AnalyticsReportResult> {
+  try {
+    const res = await fetch("/api/admin/analytics/report", { credentials: "include" });
+    return (await res.json()) as AnalyticsReportResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+export type ApplyDiscountResult =
+  | { ok: true; product: { id: number; discountPercent: number; price: number; originalPrice: number } }
+  | { ok: false; error: string };
+
+export async function applyProductDiscount(productId: number, discountPercent: number): Promise<ApplyDiscountResult> {
+  try {
+    const res = await fetch("/api/admin/analytics/discounts/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ productId, discountPercent }),
+    });
+    return (await res.json()) as ApplyDiscountResult;
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+// ---- Персональні рекомендації (лише авторизований покупець) ----
+
+// Для гостя сервер відповідає 401 — це не помилка, а «рекомендацій нема».
+export async function getMyRecommendations(): Promise<ApiRecommendation[]> {
+  try {
+    const res = await fetch("/api/recommendations", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ok: boolean; recommendations?: ApiRecommendation[] };
+    return data.recommendations ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// Поллінг нових замовлень для сповіщень адміна (див. admin-notifications.ts).
+// afterId=0 при першому виклику поверне лише maxId (без списку "нових"),
+// щоб при відкритті адмінки не посипались сповіщення про всю історію.
+export async function getOrderNotifications(afterId: number): Promise<OrderNotificationsResult> {
+  try {
+    const res = await fetch(`/api/admin/orders/notifications?afterId=${afterId}`, { credentials: "include" });
+    if (!res.ok) return { ok: false, maxId: afterId, orders: [], pendingOrders: [] };
+    return (await res.json()) as OrderNotificationsResult;
+  } catch {
+    return { ok: false, maxId: afterId, orders: [], pendingOrders: [] };
+  }
+}
+
+// Публічні підказки на вітрину (бестселери + акційні товари) — без
+// авторизації, показуються всім. Див. storefront-highlights.ts.
+export async function getStorefrontHighlights(): Promise<ApiStorefrontHighlights> {
+  try {
+    const res = await fetch("/api/products/highlights", { credentials: "include" });
+    if (!res.ok) return { ok: false, popular: [], promoted: [] };
+    return (await res.json()) as ApiStorefrontHighlights;
+  } catch {
+    return { ok: false, popular: [], promoted: [] };
   }
 }

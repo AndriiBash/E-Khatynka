@@ -1,3 +1,5 @@
+import { renderAnalytics } from "./admin-analytics.js";
+import { initOrderNotifications, openNotificationPanel } from "./admin-notifications.js";
 import {
   getSession,
   logout,
@@ -49,7 +51,7 @@ import {
   type DeleteResult,
 } from "./storage.js";
 import { initPreloader, hidePreloader } from "./preloader.js";
-import { userMenuHtml, setupUserMenu } from "./user-menu.js";
+import { userMenuHtml, setupUserMenu, closeUserMenu } from "./user-menu.js";
 import { lockScroll, unlockScroll } from "./scroll-lock.js";
 import type {
   ApiCategory,
@@ -273,7 +275,7 @@ const VIRTUAL_ROUTES: Record<string, string> = {
 // футера (він лише на головній).
 function currentNavKey(): string {
   const hash = window.location.hash;
-  const tableMatch = hash.match(/^#\/table\/([a-z_]+)$/);
+  const tableMatch = hash.match(/^#\/table\/([a-z_]+)(?:\/\d+)?$/);
   if (tableMatch) return tableMatch[1];
   if (hash in VIRTUAL_ROUTES) return hash.slice(2); // "#/analytics" -> "analytics"
   return "home";
@@ -284,9 +286,13 @@ function renderRoute(): void {
   updateFooterVisibility();
 
   const hash = window.location.hash;
-  const tableMatch = hash.match(/^#\/table\/([a-z_]+)$/);
+  const tableMatch = hash.match(/^#\/table\/([a-z_]+)(?:\/(\d+))?$/);
   if (tableMatch) {
-    void renderTableView(tableMatch[1]);
+    void renderTableView(tableMatch[1], tableMatch[2] ? Number(tableMatch[2]) : null);
+    return;
+  }
+  if (hash === "#/analytics") {
+    void renderAnalytics();
     return;
   }
   if (hash in VIRTUAL_ROUTES) {
@@ -1567,11 +1573,18 @@ function setupIngredientModalIconPicker(): void {
 // Той самий візуальний прийом, що роль/статус в інших таблицях, лише
 // зворотний за змістом кольору (--error замість --success/--accent).
 function stockBadgeHtml(i: ApiIngredient): string {
-  const low = i.lowStockThreshold !== null && i.stockQuantity <= i.lowStockThreshold;
+  const low = isLowStock(i);
   if (!low) return `${formatQuantity(i.stockQuantity)} ${escapeHtml(i.unit)}`;
   return `<span class="admin-table__badge admin-table__badge--warning">${formatQuantity(
     i.stockQuantity
   )} ${escapeHtml(i.unit)} — мало</span>`;
+}
+
+// Та сама умова, що у stockBadgeHtml — винесена окремо, щоб фільтр
+// "Мало на складі" в таблиці шукав РІВНО ті самі рядки, де показана
+// жовта плашка "— мало", без дублювання логіки.
+function isLowStock(i: ApiIngredient): boolean {
+  return i.lowStockThreshold !== null && i.stockQuantity <= i.lowStockThreshold;
 }
 
 function formatQuantity(n: number): string {
@@ -1760,6 +1773,17 @@ const ingredientsTable = createSimpleAdminTable<ApiIngredient>({
   fetchAll: getIngredients,
   getId: (i) => i.id,
   matchesQuery: (i, q) => i.name.toLowerCase().includes(q),
+  filters: [
+    {
+      id: "stock",
+      allLabel: "Будь-який залишок",
+      options: [
+        { value: "low", label: "Мало на складі" },
+        { value: "ok", label: "Достатньо" },
+      ],
+      matches: (i, v) => (v === "low" ? isLowStock(i) : !isLowStock(i)),
+    },
+  ],
   rowHtml: ingredientRowHtml,
   previewBodyHtml: (ingredient) => {
     const icon = ingredient.iconUrl
@@ -1793,37 +1817,60 @@ const ingredientsTable = createSimpleAdminTable<ApiIngredient>({
   onAdd: () => openIngredientModal({ type: "create" }),
 });
 
+
 // ==============================
-// Рух інгредієнтів — журнал фактичних списань/надходжень (на відміну
-// від product_recipes — там лише НОРМА витрати). Без редагування:
-// помилковий запис видаляється (сервер поверне залишок назад) і
-// додається новий, а не правиться заднім числом.
+// Рух інгредієнтів і продукції — 4 операції:
+//   ingredient_purchase — закупівля інгредієнта
+//   ingredient_writeoff — списання інгредієнта
+//   product_writeoff    — списання готової продукції
+//   production           — приготування: обираєш продукт і кількість,
+//                           решту (які інгредієнти й скільки) бекенд
+//                           бере з рецепта продукту сам.
+// Без редагування: помилковий запис видаляється (сервер поверне
+// залишок назад) і додається новий, а не правиться заднім числом.
 // ==============================
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
-  restock: "Поповнення",
-  production: "Списано на виробництво",
-  waste: "Списання браку",
-  adjustment: "Ручне коригування",
+  ingredient_purchase: "Закупівля інгредієнтів",
+  ingredient_writeoff: "Списання інгредієнтів",
+  product_writeoff: "Списання продукції",
+  production: "Приготування продукції",
 };
 
 function movementTypeLabel(type: string): string {
   return MOVEMENT_TYPE_LABELS[type] ?? type;
 }
 
+// Заголовок рядка/прев'ю — те, ЩО саме змінилось: назва інгредієнта
+// для операцій з інгредієнтами, назва продукту для списання/
+// приготування продукції.
+function movementSubjectName(m: ApiAdminIngredientMovement): string {
+  return m.ingredientId !== null ? (m.ingredientName ?? "—") : (m.productName ?? "—");
+}
+
+function movementUnitLabel(m: ApiAdminIngredientMovement): string {
+  return m.ingredientId !== null ? (m.ingredientUnit ?? "") : "шт";
+}
+
+function movementIsPositive(m: ApiAdminIngredientMovement): boolean {
+  return m.movementType === "ingredient_purchase" || m.movementType === "production";
+}
+
 function movementQuantityHtml(m: ApiAdminIngredientMovement): string {
-  const positive = m.quantity > 0;
-  const sign = positive ? "+" : "";
+  const positive = movementIsPositive(m);
   return `<span class="admin-table__badge${
     positive ? " admin-table__badge--success" : " admin-table__badge--warning"
-  }">${sign}${formatQuantity(m.quantity)} ${escapeHtml(m.ingredientUnit)}</span>`;
+  }">${positive ? "+" : "−"}${formatQuantity(m.quantity)} ${escapeHtml(movementUnitLabel(m))}</span>`;
 }
 
 function movementRowHtml(m: ApiAdminIngredientMovement, isActive: boolean): string {
+  const subtitle = m.movementType === "production" && m.items ? ` (${m.items.length} інгр.)` : "";
   return `
     <tr class="${isActive ? "admin-table__row--active" : ""}" data-row-id="${m.id}">
       <td class="admin-table__description-cell">${formatDateTimeShort(m.createdAt)}</td>
-      <td class="admin-table__name-cell" title="${escapeHtml(m.ingredientName)}">${escapeHtml(m.ingredientName)}</td>
+      <td class="admin-table__name-cell" title="${escapeHtml(movementSubjectName(m))}">${escapeHtml(
+    movementSubjectName(m)
+  )}${subtitle}</td>
       <td class="admin-table__description-cell">${escapeHtml(movementTypeLabel(m.movementType))}</td>
       <td class="admin-table__description-cell">${movementQuantityHtml(m)}</td>
       <td class="admin-table__actions-cell">
@@ -1843,15 +1890,15 @@ const MOVEMENT_TABLE_COLGROUP = `
   <colgroup>
     <col style="width:130px" />
     <col />
-    <col style="width:190px" />
+    <col style="width:210px" />
     <col style="width:140px" />
     <col style="width:110px" />
   </colgroup>`;
 const MOVEMENT_TABLE_THEAD = `
   <tr>
     <th>Дата</th>
-    <th>Інгредієнт</th>
-    <th>Тип руху</th>
+    <th>Інгредієнт / продукт</th>
+    <th>Операція</th>
     <th>Кількість</th>
     <th></th>
   </tr>`;
@@ -1860,11 +1907,74 @@ const EMPTY_MOVEMENTS_HTML = `<div class="admin-categories-empty">Рухів п�
 
 // Довідники для селектів модалки — тягнемо при кожному відкритті (не
 // кешуємо між відкриттями: список інгредієнтів/продуктів міг змінитись).
+// productFormCategories/productFormTags тут не потрібні — лише самі
+// продукти (з рецептами — recipes у ApiProduct) для селекту і для
+// live-прев'ю "буде списано" в операції "Приготування".
 let movementFormIngredients: ApiIngredient[] = [];
 let movementFormProducts: ApiProduct[] = [];
 
 function onMovementModalKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape") closeMovementModal();
+}
+
+// Показує/ховає поля модалки залежно від обраної операції — саме це
+// й було запитано: спершу операція, тоді вже потрібні під неї поля.
+function syncMovementModalFields(): void {
+  const typeSelect = document.getElementById("admin-movement-type") as HTMLSelectElement | null;
+  const ingredientField = document.getElementById("admin-movement-ingredient-field");
+  const productField = document.getElementById("admin-movement-product-field");
+  const productLabel = document.getElementById("admin-movement-product-label");
+  const quantityLabel = document.getElementById("admin-movement-quantity-label");
+  const recipePreviewField = document.getElementById("admin-movement-recipe-preview-field");
+  if (!typeSelect) return;
+
+  const type = typeSelect.value;
+  const needsIngredient = type === "ingredient_purchase" || type === "ingredient_writeoff";
+  const needsProduct = type === "product_writeoff" || type === "production";
+
+  ingredientField?.toggleAttribute("hidden", !needsIngredient);
+  productField?.toggleAttribute("hidden", !needsProduct);
+  if (recipePreviewField) recipePreviewField.hidden = type !== "production";
+
+  if (productLabel) {
+    productLabel.textContent = type === "production" ? "Продукт для приготування" : "Продукт";
+  }
+  if (quantityLabel) {
+    quantityLabel.textContent = type === "production" ? "Скільки виготовлено, шт" : "Кількість";
+  }
+
+  if (type === "production") renderMovementRecipePreview();
+}
+
+// Live-прев'ю: за обраним продуктом і кількістю показує, скільки
+// саме кожного інгредієнта буде списано — той самий розрахунок
+// (per_unit × кількість), що робить бекенд, тільки для наочності ДО
+// сабміту.
+function renderMovementRecipePreview(): void {
+  const container = document.getElementById("admin-movement-recipe-preview");
+  if (!container) return;
+
+  const productId = Number((document.getElementById("admin-movement-product") as HTMLSelectElement)?.value);
+  const quantity = Number((document.getElementById("admin-movement-quantity") as HTMLInputElement)?.value);
+  const product = movementFormProducts.find((p) => p.id === productId);
+
+  if (!product) {
+    container.innerHTML = `<p class="admin-movement-recipe-empty">Оберіть продукт.</p>`;
+    return;
+  }
+  if (!product.recipes.length) {
+    container.innerHTML = `<p class="admin-movement-recipe-empty">У цього продукту не задано рецепт.</p>`;
+    return;
+  }
+  const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
+  container.innerHTML = `<ul class="admin-product-preview-recipe-list">${product.recipes
+    .map((r) =>
+      recipeListItemHtml(
+        null,
+        `${escapeHtml(r.ingredientName)} — ${formatQuantity(r.quantity * qty)} ${escapeHtml(r.ingredientUnit)}`
+      )
+    )
+    .join("")}</ul>`;
 }
 
 async function openMovementModal(): Promise<void> {
@@ -1877,8 +1987,8 @@ async function openMovementModal(): Promise<void> {
   const message = document.getElementById("admin-movement-message");
   if (!modal || !ingredientSelect || !productSelect || !typeSelect || !quantityInput) return;
 
-  if (typeSelect) typeSelect.value = "restock";
-  if (quantityInput) quantityInput.value = "";
+  typeSelect.value = "ingredient_purchase";
+  quantityInput.value = "";
   if (commentInput) commentInput.value = "";
   if (message) {
     message.textContent = "";
@@ -1900,8 +2010,10 @@ async function openMovementModal(): Promise<void> {
       .map((i) => `<option value="${i.id}">${escapeHtml(i.name)} (${escapeHtml(i.unit)})</option>`)
       .join("");
   productSelect.innerHTML =
-    `<option value="">— Не пов'язано з продуктом —</option>` +
+    `<option value="">— Оберіть продукт —</option>` +
     movementFormProducts.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+
+  syncMovementModalFields();
 }
 
 function closeMovementModal(): void {
@@ -1920,24 +2032,22 @@ function setupMovementModal(): void {
   const form = document.getElementById("admin-movement-form") as HTMLFormElement | null;
   const message = document.getElementById("admin-movement-message");
   const ingredientError = document.getElementById("admin-movement-ingredient-error");
+  const productError = document.getElementById("admin-movement-product-error");
   const quantityError = document.getElementById("admin-movement-quantity-error");
   const typeSelect = document.getElementById("admin-movement-type") as HTMLSelectElement | null;
-  const quantityLabel = document.getElementById("admin-movement-quantity-label");
+  const productSelect = document.getElementById("admin-movement-product") as HTMLSelectElement | null;
   const quantityInput = document.getElementById("admin-movement-quantity") as HTMLInputElement | null;
   if (!modal || !form) return;
 
   closeBtn?.addEventListener("click", closeMovementModal);
   backdrop?.addEventListener("click", closeMovementModal);
 
-  if (quantityInput) restrictToNumericInput(quantityInput, true, true);
+  if (quantityInput) restrictToNumericInput(quantityInput, true, false);
 
-  // Для "Ручне коригування" кількість може бути й від'ємною (списати
-  // частину без прив'язки до виробництва/браку) — підказка в лейблі
-  // міняється разом з типом, щоб не плутати адміна знаком.
-  typeSelect?.addEventListener("change", () => {
-    if (!quantityLabel) return;
-    quantityLabel.textContent =
-      typeSelect.value === "adjustment" ? "Кількість (можна від'ємну — списати)" : "Кількість";
+  typeSelect?.addEventListener("change", syncMovementModalFields);
+  productSelect?.addEventListener("change", renderMovementRecipePreview);
+  quantityInput?.addEventListener("input", () => {
+    if (typeSelect?.value === "production") renderMovementRecipePreview();
   });
 
   const showMessage = (text: string, isError: boolean): void => {
@@ -1950,35 +2060,47 @@ function setupMovementModal(): void {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (ingredientError) ingredientError.textContent = "";
+    if (productError) productError.textContent = "";
     if (quantityError) quantityError.textContent = "";
 
-    const ingredientId = Number(
-      (document.getElementById("admin-movement-ingredient") as HTMLSelectElement).value
-    );
-    const productIdRaw = (document.getElementById("admin-movement-product") as HTMLSelectElement).value;
     const movementType = (document.getElementById("admin-movement-type") as HTMLSelectElement).value;
+    const ingredientIdRaw = (document.getElementById("admin-movement-ingredient") as HTMLSelectElement).value;
+    const productIdRaw = (document.getElementById("admin-movement-product") as HTMLSelectElement).value;
     const quantityRaw = (document.getElementById("admin-movement-quantity") as HTMLInputElement).value;
     const comment = (document.getElementById("admin-movement-comment") as HTMLInputElement).value;
 
-    if (!Number.isInteger(ingredientId) || ingredientId <= 0) {
-      if (ingredientError) ingredientError.textContent = "Оберіть інгредієнт";
-      return;
+    const needsIngredient = movementType === "ingredient_purchase" || movementType === "ingredient_writeoff";
+    const needsProduct = movementType === "product_writeoff" || movementType === "production";
+
+    let ingredientId: number | null = null;
+    if (needsIngredient) {
+      ingredientId = Number(ingredientIdRaw);
+      if (!Number.isInteger(ingredientId) || ingredientId <= 0) {
+        if (ingredientError) ingredientError.textContent = "Оберіть інгредієнт";
+        return;
+      }
     }
+
+    let productId: number | null = null;
+    if (needsProduct) {
+      productId = Number(productIdRaw);
+      if (!Number.isInteger(productId) || productId <= 0) {
+        if (productError) productError.textContent = "Оберіть продукт";
+        return;
+      }
+    }
+
     const quantity = Number(quantityRaw);
-    if (!Number.isFinite(quantity) || quantity === 0) {
-      if (quantityError) quantityError.textContent = "Введіть ненульову кількість";
-      return;
-    }
-    if (movementType !== "adjustment" && quantity < 0) {
-      if (quantityError) quantityError.textContent = "Кількість має бути додатною";
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      if (quantityError) quantityError.textContent = "Кількість має бути додатним числом";
       return;
     }
 
     void (async () => {
       const result = await createIngredientMovement({
-        ingredientId,
-        productId: productIdRaw ? Number(productIdRaw) : null,
         movementType,
+        ingredientId,
+        productId,
         quantity,
         comment,
       });
@@ -1994,35 +2116,86 @@ function setupMovementModal(): void {
   });
 }
 
+// Відносний діапазон дат для фільтра — рахує межі від "зараз", а не
+// зберігає точні дати, тож завжди актуально без додаткового стану.
+function isWithinRelativeRange(ts: number, range: string): boolean {
+  const now = new Date();
+  const d = new Date(ts);
+  if (range === "today") {
+    return d.toDateString() === now.toDateString();
+  }
+  if (range === "week") {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    return ts >= weekAgo.getTime();
+  }
+  if (range === "month") {
+    const monthAgo = new Date(now);
+    monthAgo.setMonth(now.getMonth() - 1);
+    return ts >= monthAgo.getTime();
+  }
+  return true;
+}
+
 const movementsTable = createSimpleAdminTable<ApiAdminIngredientMovement>({
   title: "Рух інгредієнтів",
-  hint: "Журнал фактичних списань і надходжень сировини — кожен запис одразу змінює залишок на складі.",
-  searchPlaceholder: "Пошук за назвою інгредієнта…",
+  hint: "Журнал фактичних закупівель/списань сировини й продукції. Приготування само списує інгредієнти за рецептом продукту.",
+  searchPlaceholder: "Пошук за назвою…",
   emptyHtml: EMPTY_MOVEMENTS_HTML,
   theadHtml: MOVEMENT_TABLE_THEAD,
   colgroupHtml: MOVEMENT_TABLE_COLGROUP,
   pageSize: 10,
   fetchAll: getIngredientMovements,
   getId: (m) => m.id,
-  matchesQuery: (m, q) => m.ingredientName.toLowerCase().includes(q),
+  matchesQuery: (m, q) => movementSubjectName(m).toLowerCase().includes(q),
+  filters: [
+    {
+      id: "type",
+      allLabel: "Усі операції",
+      options: Object.entries(MOVEMENT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+      matches: (m, v) => m.movementType === v,
+    },
+    {
+      id: "date",
+      allLabel: "Усі дати",
+      options: [
+        { value: "today", label: "Сьогодні" },
+        { value: "week", label: "За тиждень" },
+        { value: "month", label: "За місяць" },
+      ],
+      matches: (m, v) => isWithinRelativeRange(m.createdAt, v),
+    },
+  ],
   rowHtml: movementRowHtml,
   previewBodyHtml: (m) => `
     <div class="admin-preview__header">
-      <h2 class="admin-preview__name">${escapeHtml(m.ingredientName)}</h2>
+      <h2 class="admin-preview__name">${escapeHtml(movementSubjectName(m))}</h2>
       <span class="admin-preview__id">ID: ${m.id}</span>
     </div>
-    ${previewFieldHtml("tag", "Тип руху", escapeHtml(movementTypeLabel(m.movementType)))}
+    ${previewFieldHtml("tag", "Операція", escapeHtml(movementTypeLabel(m.movementType)))}
     ${previewFieldHtml("hash", "Кількість", movementQuantityHtml(m))}
-    ${m.productName ? previewFieldHtml("tag", "Продукт", escapeHtml(m.productName)) : ""}
+    ${
+      m.items && m.items.length
+        ? `<div class="admin-preview__field">
+             <span class="admin-preview__field-label">Списано за рецептом</span>
+             <ul class="admin-product-preview-recipe-list">${m.items
+               .map((it) => recipeListItemHtml(null, `${escapeHtml(it.ingredientName)} — ${formatQuantity(it.quantity)} ${escapeHtml(it.ingredientUnit)}`))
+               .join("")}</ul>
+           </div>`
+        : ""
+    }
     ${m.comment ? previewFieldHtml("hash", "Коментар", escapeHtml(m.comment)) : ""}
     ${previewFieldHtml("calendar", "Дата", formatDateTime(m.createdAt))}`,
   confirmTitle: () => "Видалити цей рух?",
   confirmMessage: (m) =>
-    `Рух «${movementTypeLabel(m.movementType)}» по «${m.ingredientName}» буде видалено, а залишок на складі — повернено назад.`,
+    m.items && m.items.length
+      ? `Партію «${movementTypeLabel(m.movementType)}» по «${movementSubjectName(m)}» буде видалено ЦІЛКОМ (разом з усіма списаними інгредієнтами), а залишки — повернено назад.`
+      : `Рух «${movementTypeLabel(m.movementType)}» по «${movementSubjectName(m)}» буде видалено, а залишок — повернено назад.`,
   deleteOne: deleteIngredientMovement,
   addButtonLabel: "+ Додати рух",
   onAdd: () => void openMovementModal(),
 });
+
 
 // ==============================
 // Способи оплати — лише перегляд + видалення (див. коментар біля
@@ -2181,15 +2354,34 @@ interface SimpleAdminTableConfig<T, Id extends string | number = number> {
   // перезапитати весь список і перемалювати панель, якщо власний
   // контрол щось змінив на сервері.
   afterPreviewRender?: (item: T, panel: HTMLElement, reload: () => Promise<void>) => void;
+  // Комбобокси-фільтри поруч із пошуком (окрім самого пошуку за
+  // текстом) — наприклад статус замовлення, категорія продукту, тип
+  // операції руху інгредієнтів. Кожен незалежний: рядок має пройти
+  // ВСІ активні фільтри одразу, крім пошуку.
+  filters?: SimpleAdminTableFilter<T>[];
+}
+
+interface SimpleAdminTableFilter<T> {
+  id: string; // унікальний в межах таблиці — використовується для DOM id і зберігання поточного значення
+  allLabel: string; // текст пункту "не фільтровано" — "Усі статуси", "Усі категорії" тощо
+  options?: { value: string; label: string }[]; // статичний список — відомий одразу (типи операцій, статуси)
+  // Або обчислити варіанти З УЖЕ ЗАВАНТАЖЕНИХ рядків таблиці (категорії,
+  // які реально є серед продуктів) — довантажується в <select> вже
+  // ПІСЛЯ fetchAll, бо на момент першого render() даних ще нема.
+  optionsFrom?: (items: T[]) => { value: string; label: string }[];
+  matches: (item: T, value: string) => boolean; // викликається лише коли значення фільтра не порожнє
 }
 
 function createSimpleAdminTable<T, Id extends string | number = number>(
   config: SimpleAdminTableConfig<T, Id>
-): { render: () => void; refresh: () => Promise<void> } {
+): { render: () => void; refresh: () => Promise<void>; openItem: (id: Id) => Promise<void> } {
   let all: T[] = [];
   let searchQuery = "";
   let page = 1;
   let previewId: Id | null = null;
+  // Поточне значення кожного фільтра, за id — "" означає "не фільтровано".
+  const filterValues: Record<string, string> = {};
+  for (const f of config.filters ?? []) filterValues[f.id] = "";
   const parseId = config.parseId ?? ((raw: string) => Number(raw) as Id);
 
   const rootId = "admin-view";
@@ -2199,11 +2391,18 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
   const searchId = `admin-simple-${config.title}-search`;
   const clearId = `admin-simple-${config.title}-search-clear`;
   const addBtnId = `admin-simple-${config.title}-add`;
+  const filterId = (fid: string) => `admin-simple-${config.title}-filter-${fid}`;
 
   function filtered(): T[] {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((item) => config.matchesQuery(item, q));
+    return all.filter((item) => {
+      if (q && !config.matchesQuery(item, q)) return false;
+      for (const f of config.filters ?? []) {
+        const v = filterValues[f.id];
+        if (v && !f.matches(item, v)) return false;
+      }
+      return true;
+    });
   }
 
   function highlightActiveRow(): void {
@@ -2427,6 +2626,25 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
     if (previewId !== null && !all.some((i) => config.getId(i) === previewId)) {
       previewId = null;
     }
+    // Опції фільтра, обчислені з уже завантажених даних (наприклад
+    // список категорій, які реально є серед продуктів) — на момент
+    // першого render() toolbar'у цих даних ще нема, тож довантажуємо
+    // <select> тут, зберігаючи поточний вибір, якщо він ще актуальний.
+    for (const f of config.filters ?? []) {
+      if (!f.optionsFrom) continue;
+      const select = document.getElementById(filterId(f.id)) as HTMLSelectElement | null;
+      if (!select) continue;
+      const options = f.optionsFrom(all);
+      const current = filterValues[f.id];
+      select.innerHTML =
+        `<option value="">${escapeHtml(f.allLabel)}</option>` +
+        options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
+      if (current && options.some((o) => o.value === current)) {
+        select.value = current;
+      } else {
+        filterValues[f.id] = "";
+      }
+    }
     renderTableBody();
     renderPreviewPanel();
   }
@@ -2457,6 +2675,17 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
     });
 
     syncClearBtn();
+  }
+
+  function setupFilters(): void {
+    for (const f of config.filters ?? []) {
+      const select = document.getElementById(filterId(f.id)) as HTMLSelectElement | null;
+      select?.addEventListener("change", () => {
+        filterValues[f.id] = select.value;
+        page = 1;
+        renderTableBody();
+      });
+    }
   }
 
   function render(): void {
@@ -2493,6 +2722,15 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
               </button>
             </div>
+            ${(config.filters ?? [])
+              .map(
+                (f) => `
+            <select class="admin-table-filter" id="${filterId(f.id)}" aria-label="${escapeHtml(f.allLabel)}">
+              <option value="">${escapeHtml(f.allLabel)}</option>
+              ${(f.options ?? []).map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("")}
+            </select>`
+              )
+              .join("")}
           </div>
 
           <div id="${wrapId}" class="admin-table-wrap"></div>
@@ -2510,6 +2748,7 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
     }
 
     setupSearch();
+    setupFilters();
     setupTableEvents();
     void loadAndRender();
   }
@@ -2520,7 +2759,44 @@ function createSimpleAdminTable<T, Id extends string | number = number>(
   // (навігація по хешу). refresh — для випадків "щось помінялось на
   // сервері, треба оновити список, не закриваючи відкриту панель"
   // (наприклад після зміни статусу замовлення в своїй модалці).
-  return { render, refresh: loadAndRender };
+  // Відкрити конкретний запис за id — використовується для переходу з
+  // повідомлення про нове замовлення (дзвіночок у шапці) прямо на
+  // потрібний рядок: скидає пошук/фільтри, якщо вони ховають рядок,
+  // перемикає сторінку пагінації й відкриває прев'ю-панель, а сам рядок
+  // на секунду підсвічується жовтим, щоб було видно, куди дивитись.
+  async function openItem(id: Id): Promise<void> {
+    if (all.length === 0) await loadAndRender();
+    if (!all.some((i) => config.getId(i) === id)) return; // такого запису нема (видалили тощо)
+
+    if (!filtered().some((i) => config.getId(i) === id)) {
+      searchQuery = "";
+      for (const f of config.filters ?? []) filterValues[f.id] = "";
+      const searchInput = document.getElementById(searchId) as HTMLInputElement | null;
+      if (searchInput) searchInput.value = "";
+      for (const f of config.filters ?? []) {
+        const select = document.getElementById(filterId(f.id)) as HTMLSelectElement | null;
+        if (select) select.value = "";
+      }
+    }
+
+    const items = filtered();
+    const idx = items.findIndex((i) => config.getId(i) === id);
+    if (idx >= 0) page = Math.floor(idx / config.pageSize) + 1;
+
+    previewId = id;
+    renderTableBody();
+    renderPreviewPanel();
+
+    const wrap = document.getElementById(wrapId);
+    const row = wrap?.querySelector<HTMLTableRowElement>(`tr[data-row-id="${String(id)}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.add("admin-table__row--flash");
+      setTimeout(() => row.classList.remove("admin-table__row--flash"), 1600);
+    }
+  }
+
+  return { render, refresh: loadAndRender, openItem };
 }
 
 const wishlistsTable = createSimpleAdminTable<ApiAdminWishlistItem>({
@@ -2890,7 +3166,7 @@ function setupOrderStatusModal(): void {
 const ordersTable = createSimpleAdminTable<ApiAdminOrder>({
   title: "Замовлення",
   hint: "Замовлення покупців, оформлені на сайті, та їхні статуси — тут лише перегляд і видалення.",
-  searchPlaceholder: "Пошук за користувачем або email…",
+  searchPlaceholder: "Пошук за користувачем, email або номером…",
   emptyHtml: `<div class="admin-categories-empty">Замовлень ще немає.</div>`,
   theadHtml: `<tr><th>Покупець</th><th>Товарів</th><th>Сума</th><th>Статус</th><th>Створено</th><th></th></tr>`,
   colgroupHtml: `<colgroup><col /><col style="width:100px" /><col style="width:110px" /><col style="width:150px" /><col style="width:170px" /><col style="width:110px" /></colgroup>`,
@@ -2898,9 +3174,20 @@ const ordersTable = createSimpleAdminTable<ApiAdminOrder>({
   fetchAll: getAdminOrders,
   deleteOne: deleteAdminOrder,
   getId: (o) => o.id,
-  matchesQuery: (o, q) => o.userFullName.toLowerCase().includes(q) || o.userEmail.toLowerCase().includes(q),
+  matchesQuery: (o, q) =>
+    o.userFullName.toLowerCase().includes(q) ||
+    o.userEmail.toLowerCase().includes(q) ||
+    String(o.id).includes(q),
+  filters: [
+    {
+      id: "status",
+      allLabel: "Усі статуси",
+      options: ORDER_STATUS_OPTIONS.map((status) => ({ value: status, label: orderStatusLabel(status) })),
+      matches: (o, v) => o.status === v,
+    },
+  ],
   rowHtml: (o, isActive) => `
-    <tr class="${isActive ? "admin-table__row--active" : ""}" data-row-id="${o.id}">
+    <tr class="${isActive ? "admin-table__row--active" : ""}${o.status === "pending" ? " admin-table__row--pending" : ""}" data-row-id="${o.id}">
       <td class="admin-table__user-cell" title="${escapeHtml(o.userFullName)}">
         <span class="admin-table__user-name">${escapeHtml(o.userFullName)}</span>
         <span class="admin-table__subtext">${escapeHtml(o.userEmail)}</span>
@@ -3297,6 +3584,27 @@ const productsTable = createSimpleAdminTable<ApiProduct>({
   },
   getId: (p) => p.id,
   matchesQuery: (p, q) => p.name.toLowerCase().includes(q),
+  filters: [
+    {
+      id: "category",
+      allLabel: "Усі категорії",
+      optionsFrom: (products) => {
+        const seen = new Map<number, string>();
+        for (const p of products) if (!seen.has(p.categoryId)) seen.set(p.categoryId, categoryNameById(p.categoryId));
+        return Array.from(seen.entries()).map(([id, name]) => ({ value: String(id), label: name }));
+      },
+      matches: (p, v) => String(p.categoryId) === v,
+    },
+    {
+      id: "stock",
+      allLabel: "Будь-який залишок",
+      options: [
+        { value: "in", label: "У наявності" },
+        { value: "out", label: "Немає в наявності" },
+      ],
+      matches: (p, v) => (v === "in" ? p.stockQuantity > 0 : p.stockQuantity === 0),
+    },
+  ],
   rowHtml: productRowHtml,
   previewBodyHtml: (product) => {
     const icon = product.imageUrl
@@ -3570,7 +3878,7 @@ function setupProductModal(): void {
   });
 }
 
-async function renderTableView(key: string): Promise<void> {
+async function renderTableView(key: string, focusId: number | null = null): Promise<void> {
   const table = TABLES.find((t) => t.key === key);
   if (!table) {
     window.location.hash = "";
@@ -3607,6 +3915,7 @@ async function renderTableView(key: string): Promise<void> {
     productsTable.render();
   } else if (table.key === "orders") {
     ordersTable.render();
+    if (focusId !== null) void ordersTable.openItem(focusId);
   } else if (table.key === "order_items") {
     orderItemsTable.render();
   } else {
@@ -3621,7 +3930,7 @@ async function renderTableView(key: string): Promise<void> {
 // — резолвиться через Promise<boolean>, підходить для будь-якого рядка.
 // ==============================
 
-function confirmDelete(title: string, message: string): Promise<boolean> {
+export function confirmDelete(title: string, message: string, confirmLabel = "Так, видалити"): Promise<boolean> {
   return new Promise((resolve) => {
     const modal = document.getElementById("admin-delete-modal");
     const titleEl = document.getElementById("admin-delete-modal-title");
@@ -3637,6 +3946,7 @@ function confirmDelete(title: string, message: string): Promise<boolean> {
 
     if (titleEl) titleEl.textContent = title;
     if (text) text.textContent = message;
+    confirmBtn.textContent = confirmLabel;
 
     const close = (result: boolean): void => {
       modal.classList.remove("auth-modal--open");
@@ -3646,6 +3956,7 @@ function confirmDelete(title: string, message: string): Promise<boolean> {
       confirmBtn.removeEventListener("click", onConfirm);
       closeBtn.removeEventListener("click", onCancel);
       backdrop?.removeEventListener("click", onCancel);
+      confirmBtn.textContent = "Так, видалити";
       resolve(result);
     };
     const onCancel = (): void => close(false);
@@ -3728,6 +4039,17 @@ async function render(): Promise<void> {
     })();
   });
 
+  // Пункт "Сповіщення про замовлення" в меню адміна — лише мобільна
+  // адаптація (на десктопі для цього є дзвіночок у топбарі, дивись
+  // .admin-notif/.user-menu__item--notif в main.css). Закриваємо саме
+  // меню перед тим, як розкрити панель сповіщень — інакше вони лежали
+  // б одне на одному.
+  document.getElementById("user-menu-notif-btn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeUserMenu();
+    openNotificationPanel();
+  });
+
   setupUserMenu();
   setupCategoryModal();
   setupTagModal();
@@ -3738,6 +4060,7 @@ async function render(): Promise<void> {
   setupProductModal();
   setupOrderStatusModal();
   setupSidebar();
+  initOrderNotifications();
 
   window.addEventListener("hashchange", renderRoute);
   renderRoute();

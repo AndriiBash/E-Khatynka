@@ -4,6 +4,15 @@ import { getSession } from "./storage.js";
 import { openAuthModal, setupAuthModal, setAuthSuccessHandler, closeAuthModal } from "./auth-modal.js";
 import { isFavorite, toggleFavorite, loadFavorites } from "./favorites.js";
 
+function weightDisplay(weight: string): string {
+  // Поле "вага" в БД зберігає просто число (грами) без одиниці — сама
+  // назва товару "Coca-Cola 0,5 л" уже показує об'єм, а це поле завжди
+  // означає грами. Дописуємо "г" лише коли це справді голе число, щоб
+  // не зламати якийсь майбутній запис, куди хтось руками впише щось на
+  // кшталт "0,5 л" — тоді лишаємо як є.
+  return /^\d+([.,]\d+)?$/.test(weight.trim()) ? `${weight} г` : weight;
+}
+
 // ==============================
 // Сторінка товару ("карточка товару" в термінології е-commerce) — бере
 // реальні дані з того самого products.ts, що й каталог, за id з URL
@@ -100,7 +109,7 @@ function renderSkeleton(root: HTMLElement): void {
 
 function productPageImageHtml(product: Product): string {
   if (product.imageUrl) {
-    return `<img class="product-page__photo" src="${product.imageUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-page__image', textContent: '${product.emoji}'}))" />`;
+    return `<img class="product-page__photo" src="${product.imageUrl}" alt="" onload="this.parentElement.classList.remove('skeleton')" onerror="this.parentElement.classList.remove('skeleton'); this.replaceWith(Object.assign(document.createElement('div'), {className: 'product-page__image', textContent: '${product.emoji}'}))" />`;
   }
   return `<div class="product-page__image" aria-hidden="true">${product.emoji}</div>`;
 }
@@ -167,12 +176,24 @@ function formatQuantityLocal(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
 }
 
+function escapeTagText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Теги товару (Солодке, Веганське тощо) — показуємо лише тут, на
+// сторінці товару, а не на картках каталогу.
+function productTagsHtml(product: Product): string {
+  if (!product.tags || product.tags.length === 0) return "";
+  const chips = product.tags.map((t) => `<li class="product-page__tag">${escapeTagText(t)}</li>`).join("");
+  return `<ul class="product-page__tags">${chips}</ul>`;
+}
+
 function renderProduct(root: HTMLElement, product: Product, id: string): void {
   document.title = `${product.name} – Є-Хатинка`;
 
   root.innerHTML = `
     <div class="product-page__layout">
-      <div class="product-page__image-wrap">
+      <div class="product-page__image-wrap${product.imageUrl ? " skeleton" : ""}">
         ${productPageImageHtml(product)}
         <button class="product-page__favorite" id="product-page-favorite" type="button" aria-label="Додати в обране" aria-pressed="false"></button>
       </div>
@@ -181,7 +202,7 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
         <div class="product-page__top">
           <div class="product-page__titles">
             <h1 class="product-page__name">${product.name}</h1>
-            <div class="product-page__weight">${product.weight}</div>
+            <div class="product-page__weight">${weightDisplay(product.weight)}</div>
           </div>
 
           <div class="product-page__control">
@@ -201,6 +222,8 @@ function renderProduct(root: HTMLElement, product: Product, id: string): void {
         ${productPagePriceHtml(product)}
 
         <p class="product-page__description">${product.description}</p>
+
+        ${productTagsHtml(product)}
 
         <div class="product-page__specs">
           <div class="product-page__spec">

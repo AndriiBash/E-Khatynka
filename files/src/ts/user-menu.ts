@@ -224,12 +224,31 @@ export function userMenuHtml(session: SessionUser): string {
             </svg>
           </button>
         </div>${customerItems}
+        ${
+          isAdmin
+            ? `<button class="user-menu__item user-menu__item--notif" id="user-menu-notif-btn" type="button">
+          <span class="user-menu__icon user-menu__icon--notif" aria-hidden="true"></span>
+          Сповіщення про замовлення
+          <span class="admin-notif-badge" id="admin-notif-mobile-badge"></span>
+        </button>`
+            : ""
+        }
         <button class="user-menu__item" id="logout-btn" type="button">
           <img class="user-menu__icon" src="assets/icons/logout.svg" alt="" aria-hidden="true" />
           Вийти
         </button>
       </div>
     </div>${preferencesModal}${paymentModal}${wishlistModal}${ordersModal}`;
+}
+
+let closeFn: (() => void) | null = null;
+
+// Викликається ззовні (admin.ts) — напр. коли пункт "Сповіщення" у
+// мобільній адаптації меню адміна відкриває панель сповіщень, дропдаун
+// самого меню перед цим слід закрити, щоб вони не лежали один на
+// одному. no-op, якщо setupUserMenu() ще не викликався.
+export function closeUserMenu(): void {
+  closeFn?.();
 }
 
 export function setupUserMenu(): void {
@@ -245,6 +264,7 @@ export function setupUserMenu(): void {
     trigger.setAttribute("aria-expanded", "false");
     document.body.classList.remove("has-open-user-menu");
   };
+  closeFn = close;
 
   const toggle = (): void => {
     const isOpen = menu.classList.toggle("user-menu--open");
@@ -401,6 +421,9 @@ async function openMyPrefsModal(): Promise<void> {
       void (async () => {
         const result = await setMyTagPreference(tagId, enabled);
         input.disabled = false;
+        if (result.ok) {
+          document.dispatchEvent(new CustomEvent("recommendations:refresh"));
+        }
         if (!result.ok) {
           // Відкат перемикача — запит не пройшов (наприклад, розірвався
           // звʼязок), не лишаємо UI брехати про стан, якого нема в БД.
