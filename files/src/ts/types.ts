@@ -240,7 +240,7 @@ export interface ApiForecastRow {
   confidence: ForecastConfidence;
   historyDays: number;
   wape: number | null;
-  naiveWape: number | null;
+  ensembleWeights: Record<string, number> | null;
   sigma: number;
   // Прогноз середнього попиту на кожен із наступних днів (шт.)
   forecast: number[];
@@ -346,9 +346,7 @@ export interface ApiAnalyticsReport {
     dayparts: ApiDaypart[];
     accuracy: {
       wape: number | null;
-      naiveWape: number | null;
       totalWape: number | null;
-      totalNaiveWape: number | null;
       totalModel: string | null;
     };
     warnings: string[];

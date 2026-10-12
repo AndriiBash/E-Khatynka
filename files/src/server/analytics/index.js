@@ -37,13 +37,11 @@ function buildReport(db, now = Date.now()) {
   // ---- Прогноз по товарах (для таблиці й міні-графіків)
   const perishableIds = new Set(plan.filter((p) => p.perishable).map((p) => p.productId));
   let chosenAbs = 0;
-  let naiveAbs = 0;
   let actualSum = 0;
   const forecastRows = products.map((p) => {
     const f = byProduct.get(p.id);
-    if (f.backtest && f.backtest.naiveAbsSum !== null) {
+    if (f.backtest) {
       chosenAbs += f.backtest.absSum;
-      naiveAbs += f.backtest.naiveAbsSum;
       actualSum += f.backtest.actualSum;
     }
     return {
@@ -60,7 +58,9 @@ function buildReport(db, now = Date.now()) {
       confidence: f.confidence,
       historyDays: f.historyDays,
       wape: f.backtest?.wape ?? null,
-      naiveWape: f.naiveWape,
+      ensembleWeights: f.ensembleWeights
+        ? Object.fromEntries(Object.entries(f.ensembleWeights).map(([k, v]) => [k, Math.round(v * 100) / 100]))
+        : null,
       sigma: Math.round(f.sigma * 100) / 100,
       forecast: f.forecast.map((v) => Math.round(v * 100) / 100),
       forecastWeek: Math.round(sum(f.forecast) * 10) / 10,
@@ -123,10 +123,8 @@ function buildReport(db, now = Date.now()) {
       accuracy: {
         // по окремих товарах (шумно: малі кількості)
         wape: actualSum > 0 ? chosenAbs / actualSum : null,
-        naiveWape: actualSum > 0 ? naiveAbs / actualSum : null,
         // по загальному обсягу продажів за день
         totalWape: aggregate?.wape ?? null,
-        totalNaiveWape: aggregate?.naiveWape ?? null,
         totalModel: aggregate ? modelNameById[aggregate.modelId] : null,
       },
       warnings,

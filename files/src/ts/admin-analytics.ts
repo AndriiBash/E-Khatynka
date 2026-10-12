@@ -212,7 +212,7 @@ function summaryCardsHtml(r: ApiAnalyticsReport): string {
     ${card("Прогноз на 7 днів", `${fmt(weekUnits, 0)} шт.`, `≈ ${fmt(weekRevenue, 0)} ${CURRENCY} виручки`)}
     ${card("Випекти завтра", `${fmt(produce?.units ?? 0, 0)} шт.`, esc(daypartText))}
     ${card("Знижки радить система", `${toDiscount} ${toDiscount === 1 ? "товар" : "товарів"}`, "ризик списання або мало продажів")}
-    ${card("Помилка прогнозу (WAPE)", fmtPercent(acc.totalWape), acc.totalNaiveWape !== null ? `по всьому обсягу; наївний метод: ${fmtPercent(acc.totalNaiveWape)}` : "замало даних для оцінки")}
+    ${card("Помилка прогнозу (WAPE)", fmtPercent(acc.totalWape), acc.totalWape !== null ? "по всьому обсягу" : "замало даних")}
   </div>`;
 }
 
@@ -239,6 +239,16 @@ function shellHtml(r: ApiAnalyticsReport): string {
 
 // ---------- Вкладка «Прогноз»
 
+const WEIGHT_LABELS: Record<string, string> = { holt_winters: "ХВ", ridge: "Ridge", croston_sba: "Кростон" };
+
+function ensembleWeightsHtml(f: ApiForecastRow): string {
+  if (!f.ensembleWeights) return "";
+  const text = Object.entries(f.ensembleWeights)
+    .map(([id, w]) => `${WEIGHT_LABELS[id] ?? id} ${Math.round(w * 100)}%`)
+    .join(" · ");
+  return `<span class="an-sub">${text}</span>`;
+}
+
 function forecastRowHtml(f: ApiForecastRow): string {
   const tomorrow = f.forecast[0] ?? 0;
   return `<tr>
@@ -246,7 +256,7 @@ function forecastRowHtml(f: ApiForecastRow): string {
     <td class="an-num">${fmt(tomorrow, 1)}</td>
     <td class="an-num">${fmt(f.forecastWeek, 1)}</td>
     <td>${sparklineSvg(f.recent, f.forecast)}</td>
-    <td class="an-model">${f.modelName ? esc(f.modelName) : "—"}</td>
+    <td class="an-model">${f.modelName ? esc(f.modelName) : "—"}${ensembleWeightsHtml(f)}</td>
     <td class="an-num">${fmtPercent(f.wape)}</td>
     <td>${confidenceBadge(f.confidence)}</td>
   </tr>`;
@@ -275,7 +285,7 @@ function forecastTabHtml(r: ApiAnalyticsReport): string {
         <h2 class="admin-section__title">Прогноз по товарах</h2>
         <input class="admin-table-search an-search" id="an-forecast-search" type="search" placeholder="Пошук товару" value="${esc(forecastQuery)}" autocomplete="off" />
       </div>
-      <p class="admin-section__hint an-hint">Кількість штук на день (середнє очікування). Для кожного товару система сама обирає найточнішу модель за перевіркою на останніх тижнях (backtest); «Довіра» залежить від довжини історії й помилки. ${noSales ? `Без жодного продажу: ${noSales} товарів — їх не показано.` : ""}</p>
+      ${noSales ? `<p class="admin-section__hint an-hint">Без продажів: ${noSales} — не показано.</p>` : ""}
       <div class="admin-table-wrap">
         <table class="an-table">
           <thead><tr><th>Товар</th><th class="an-num">Завтра</th><th class="an-num">7 днів</th><th>Динаміка (28 дн. + прогноз)</th><th>Модель</th><th class="an-num">WAPE</th><th>Довіра</th></tr></thead>
@@ -321,7 +331,6 @@ function planTabHtml(r: ApiAnalyticsReport): string {
       <div class="an-chips" id="an-plan-days">${chips}</div>
       <div class="an-strip"><span class="an-strip__total">Разом випекти (швидкопсувне): <b>${fmt(total?.units ?? 0, 0)} шт.</b></span>${daypartsText}</div>
       <label class="an-check"><input type="checkbox" id="an-plan-purchased"${planShowPurchased ? " checked" : ""} /> Показувати й товари з довгим терміном (напої, фасовка)</label>
-      <p class="admin-section__hint an-hint">«Ціль» — кількість із запасом за моделлю «продавця газет»: чим вища маржа й коротший термін придатності, тим більший запас; поточний залишок віднімається лише від першого дня. Розбивку за часом доби зроблено за реальним розподілом годин замовлень.</p>
       <div class="admin-table-wrap">
         <table class="an-table">
           <thead><tr><th>Товар</th><th class="an-num">Прогноз</th><th class="an-num">Ціль</th><th class="an-num">На складі</th><th class="an-num">Випекти</th>${r.meta.dayparts.map((dp) => `<th class="an-num">${dp.label}</th>`).join("")}</tr></thead>
@@ -347,15 +356,14 @@ function ingredientRowHtml(i: ApiIngredientNeed): string {
 
 function ingredientsTabHtml(r: ApiAnalyticsReport): string {
   const rows = r.ingredients.filter((i) => !ingredientsOnlyShortage || i.shortageWeek > 0 || i.belowThreshold);
-  const critical = r.ingredients.filter((i) => i.status === "critical").length;
-  const unusedCount = r.ingredients.filter((i) => i.status === "unused").length;
+  const unusedNames = r.ingredients.filter((i) => i.status === "unused").map((i) => i.name);
   return `
     <section class="an-panel">
       <div class="an-panel__head">
         <h2 class="admin-section__title">Потреба в інгредієнтах на ${r.meta.horizonDays} днів</h2>
         <label class="an-check"><input type="checkbox" id="an-ing-shortage"${ingredientsOnlyShortage ? " checked" : ""} /> Лише дефіцит і низькі залишки</label>
       </div>
-      <p class="admin-section__hint an-hint">Показано всі ${r.meta.ingredientsTotal} інгредієнтів зі складу. Потреба = кількість до виробництва × норма з рецепта, підсумок по всіх ${r.meta.productsTotal} товарах${unusedCount ? `; ${unusedCount} інгр. не входять до жодного рецепта` : ""}. ${critical ? `<b>${critical}</b> позицій не вистачає вже на завтра.` : "На завтра всього вистачає."}</p>
+      ${unusedNames.length ? `<p class="admin-section__hint an-hint">Не входять до жодного рецепта: ${unusedNames.map(esc).join(", ")}.</p>` : ""}
       <div class="admin-table-wrap">
         <table class="an-table">
           <thead><tr><th>Інгредієнт</th><th class="an-num">Завтра</th><th class="an-num">7 днів</th><th class="an-num">На складі</th><th class="an-num">Докупити (7 дн.)</th><th>Статус</th></tr></thead>
@@ -402,7 +410,6 @@ function discountsTabHtml(r: ApiAnalyticsReport): string {
         <h2 class="admin-section__title">Де мало продажів — знижки на товари пекарні</h2>
         <label class="an-check"><input type="checkbox" id="an-disc-all"${discountsShowAll ? " checked" : ""} /> Показати всі ${r.discounts.length} товарів</label>
       </div>
-      <p class="admin-section__hint an-hint">Аналізується весь асортимент (${r.discounts.length} товарів), у списку — ті, що потребують уваги: ${attention.length}. «Ризик списання» рахується лише для швидкопсувних товарів (термін ≤ ${r.meta.perishableMaxShelfDays} дн.); для решти (напої, фасовка) — лише «Мало продажів». «Ризик списання» — залишок не встигне розійтись до кінця терміну при прогнозованому попиті; «Мало продажів» — швидкість продажів менша за половину медіани категорії або різко впала за тиждень. Знижка не опускає ціну нижче собівартості (припущення: ${Math.round(r.meta.costRatio * 100)}% ціни); приріст попиту оцінено за еластичністю ${r.meta.priceElasticity} — це припущення, а не виміряний факт.</p>
       <div class="admin-table-wrap">
         <table class="an-table an-table--discounts">
           <thead><tr><th>Товар і причина</th><th class="an-num">Залишок</th><th class="an-num">Продано за 14 дн.</th><th>Статус</th><th class="an-num">Знижка</th><th class="an-num">Ціна</th><th></th></tr></thead>
@@ -423,10 +430,9 @@ function modelsTabHtml(r: ApiAnalyticsReport): string {
     <section class="an-panel">
       <h2 class="admin-section__title">Точність прогнозу</h2>
       <div class="an-cards an-cards--tight">
-        <div class="an-card"><div class="an-card__label">WAPE, загальний обсяг</div><div class="an-card__value">${fmtPercent(a.totalWape)}</div><div class="an-card__sub">${a.totalModel ? esc(a.totalModel) : "—"} · наївний: ${fmtPercent(a.totalNaiveWape)}</div></div>
-        <div class="an-card"><div class="an-card__label">WAPE, по товарах</div><div class="an-card__value">${fmtPercent(a.wape)}</div><div class="an-card__sub">обрані моделі · наївний: ${fmtPercent(a.naiveWape)}</div></div>
+        <div class="an-card"><div class="an-card__label">WAPE, загальний обсяг</div><div class="an-card__value">${fmtPercent(a.totalWape)}</div><div class="an-card__sub">${a.totalModel ? esc(a.totalModel) : "—"}</div></div>
+        <div class="an-card"><div class="an-card__label">WAPE, по товарах</div><div class="an-card__value">${fmtPercent(a.wape)}</div><div class="an-card__sub">обрані моделі</div></div>
       </div>
-      <p class="admin-section__hint an-hint">WAPE = Σ|прогноз − факт| / Σ факт на тестових тижнях (rolling-origin, навчання лише на даних ДО тижня). По окремих товарах він завжди вищий: продажі дрібні (кілька штук на день), тож випадковий шум великий; у сумі по асортименту шум гаситься.</p>
       <div class="admin-table-wrap">
         <table class="an-table">
           <thead><tr><th>Модель</th><th class="an-num">WAPE по всіх товарах</th><th class="an-num">Обрано для товарів</th></tr></thead>
@@ -440,7 +446,9 @@ function modelsTabHtml(r: ApiAnalyticsReport): string {
         <li>Історія: ${r.meta.historyDays} дн. (скасовані замовлення не враховуються); горизонт — ${r.meta.horizonDays} дн. від завтра.</li>
         <li>Собівартість = ${Math.round(r.meta.costRatio * 100)}% від ціни (у БД її немає) — впливає на страховий запас і межу знижки.</li>
         <li>Частини доби: ${r.meta.dayparts.map((d) => `${d.label} ${d.from}–${d.to}`).join(", ")} год.</li>
-        <li>Сезонність — тижнева (день тижня) плюс профіль годин замовлень; річну сезонність без ≥ 1 року історії оцінити неможливо.</li>
+        <li>Сезонність — тижнева (день тижня), у Ridge також свята й переддні свят; плюс профіль годин замовлень. Річну сезонність без ≥ 1 року історії оцінити неможливо.</li>
+        <li>Ансамбль: ваги Хольта–Вінтерса, Ridge й Кростон-SBA підбираються окремо для кожного товару за помилкою на останніх тижнях навчальних даних.</li>
+        <li>Попит після знижки оцінено за еластичністю ${r.meta.priceElasticity} — це припущення, а не виміряний факт.</li>
         <li>Продажі обмежені залишком на складі (нема товару — нема продажу), тож реальний попит на дефіцитні позиції може бути вищим за прогноз.</li>
       </ul>
     </section>`;

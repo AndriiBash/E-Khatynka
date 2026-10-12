@@ -32,7 +32,7 @@ function backtest(y, startIdx, folds, horizon, minTrain) {
   let actualSum = 0;
   for (const { origin, len } of origins) {
     const train = y.slice(0, origin);
-    const preds = forecastAll(train, len, startIdx);
+    const { forecasts: preds } = forecastAll(train, len, startIdx);
     for (let k = 0; k < len; k++) {
       const actual = y[origin + k];
       actualSum += actual;
@@ -62,9 +62,7 @@ function backtest(y, startIdx, folds, horizon, minTrain) {
 }
 
 function chooseModel(perModel) {
-  // Сезонний наївний — лише еталон для порівняння: один випадковий
-  // тиждень тому надто шумний, щоб прогнозувати за ним.
-  const ids = MODEL_INFO.map((m) => m.id).filter((id) => perModel[id] && id !== "seasonal_naive");
+  const ids = MODEL_INFO.map((m) => m.id).filter((id) => perModel[id]);
   let best = null;
   for (const id of ids) if (!best || perModel[id].mae < perModel[best].mae - 1e-9) best = id;
   // Комбінація прогнозів стабільніша за окрему модель: якщо ансамбль
@@ -97,10 +95,10 @@ function forecastProducts(sales, products, cfg = CONFIG) {
     const bt = backtest(y, startIdx, cfg.backtestFolds, cfg.backtestHorizon, 14);
     let modelId;
     if (bt) modelId = chooseModel(bt.perModel);
-    else modelId = n >= 7 ? "dow_mean" : "moving_avg";
+    else modelId = "croston_sba";
 
-    const preds = forecastAll(y, stepsAhead, startIdx);
-    if (!preds[modelId]) modelId = preds.dow_mean ? "dow_mean" : "moving_avg";
+    const { forecasts: preds, weights } = forecastAll(y, stepsAhead, startIdx);
+    if (!preds[modelId]) modelId = "croston_sba";
     const mu = preds[modelId].slice(1); // з «завтра»
 
     const chosenStats = bt?.perModel[modelId];
@@ -125,6 +123,8 @@ function forecastProducts(sales, products, cfg = CONFIG) {
       modelId,
       historyDays: n,
       forecast: mu,
+      // Ваги складових, якщо обрано ансамбль (динамічні, по товару)
+      ensembleWeights: modelId === "ensemble" ? weights : null,
       sigma,
       confidence,
       backtest: chosenStats
@@ -136,11 +136,8 @@ function forecastProducts(sales, products, cfg = CONFIG) {
             points: chosenStats.points,
             absSum: chosenStats.absSum,
             actualSum: bt.actualSum,
-            naiveAbsSum: bt.perModel.seasonal_naive?.absSum ?? null,
           }
         : null,
-      // Наївний сезонний — еталон, з яким порівнюємо вибрану модель.
-      naiveWape: bt?.perModel.seasonal_naive?.wape ?? null,
       recent: full.slice(-28),
     });
   }
@@ -160,7 +157,6 @@ function evaluateAggregate(totalSeries, startIdx, cfg = CONFIG) {
   return {
     modelId,
     wape: bt.perModel[modelId].wape,
-    naiveWape: bt.perModel.seasonal_naive?.wape ?? null,
   };
 }
 
@@ -173,7 +169,7 @@ function emptyForecast(horizon, status, nDays) {
     sigma: 0,
     confidence: "low",
     backtest: null,
-    naiveWape: null,
+    ensembleWeights: null,
     recent: new Array(Math.min(28, nDays)).fill(0),
   };
 }
