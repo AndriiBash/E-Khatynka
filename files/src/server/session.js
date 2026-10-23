@@ -11,7 +11,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?\d{9,13}$/;
 
 function toSessionUser(row) {
-  return { id: row.id, fullName: row.full_name, email: row.email, phone: row.phone, role: row.role };
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone,
+    role: row.role,
+    customerType: row.customer_type === "wholesale" ? "wholesale" : "retail",
+  };
 }
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 днів — те саме, що maxAge кукі нижче

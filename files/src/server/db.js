@@ -138,6 +138,7 @@ db.exec(`
     phone TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'customer',
+    customer_type TEXT NOT NULL DEFAULT 'retail',
     created_at INTEGER NOT NULL
   );
 
@@ -194,6 +195,9 @@ db.exec(`
     total_amount REAL NOT NULL,
     delivery_address TEXT NOT NULL,
     contact_phone TEXT NOT NULL,
+    fulfillment_type TEXT NOT NULL DEFAULT 'delivery',
+    pickup_at INTEGER,
+    comment TEXT,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id)
@@ -321,6 +325,24 @@ db.exec(`
     UNIQUE (user_id, tag_id)
   );
 `);
+
+// ---- Оптові покупці. Два види клієнтів: 'retail' (звичайний покупець,
+// доставка) і 'wholesale' (оптовий — замовляє наперед із самовивозом).
+// CREATE TABLE IF NOT EXISTS вище не чіпає вже існуючі таблиці, тож для
+// старих баз колонки додаємо окремо через ALTER TABLE (існуючі рядки
+// отримують значення за замовчуванням — 'retail' / 'delivery').
+if (!columnExists("users", "customer_type")) {
+  db.exec("ALTER TABLE users ADD COLUMN customer_type TEXT NOT NULL DEFAULT 'retail';");
+}
+if (!columnExists("orders", "fulfillment_type")) {
+  db.exec("ALTER TABLE orders ADD COLUMN fulfillment_type TEXT NOT NULL DEFAULT 'delivery';");
+}
+if (!columnExists("orders", "pickup_at")) {
+  db.exec("ALTER TABLE orders ADD COLUMN pickup_at INTEGER;");
+}
+if (!columnExists("orders", "comment")) {
+  db.exec("ALTER TABLE orders ADD COLUMN comment TEXT;");
+}
 
 // ---- Адмін-акаунт: сідиться сам собою при першому запуску (якщо ще
 // нема жодного юзера з role='admin') — щоб можна було зайти в

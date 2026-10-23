@@ -24,6 +24,17 @@ const { db } = require("../db");
 const { requireAuth, requireAdmin } = require("../session");
 const { getOrCreateCart } = require("../cart");
 const { discountedPrice } = require("../pricing");
+const {
+  WHOLESALE_MIN_LEAD_HOURS,
+  WHOLESALE_MAX_DAYS_AHEAD,
+  PICKUP_FIRST_HOUR,
+  PICKUP_LAST_HOUR,
+  WHOLESALE_MIN_QTY_PER_ITEM,
+  WHOLESALE_DISCOUNT_TIERS,
+  WHOLESALE_MAX_TOTAL_DISCOUNT,
+  wholesaleVolumePercent,
+  wholesaleUnitPrice,
+} = require("../wholesale");
 
 const router = express.Router();
 
@@ -59,6 +70,9 @@ function toOrder(row) {
     totalAmount: row.total_amount,
     deliveryAddress: row.delivery_address,
     contactPhone: row.contact_phone,
+    fulfillmentType: row.fulfillment_type || "delivery",
+    pickupAt: row.pickup_at ?? null,
+    comment: row.comment ?? null,
     createdAt: row.created_at,
     items: getOrderItems(row.id),
   };
@@ -157,6 +171,130 @@ router.post("/api/orders", requireAuth, (req, res) => {
   res.json({ ok: true, order: toOrder(order) });
 });
 
+
+// Правила самовивозу для сторінки оптових замовлень (wholesale.html) —
+// одне джерело правди з сервера, щоб форма й перевірка не розходились.
+router.get("/api/wholesale/config", (req, res) => {
+  res.json({
+    ok: true,
+    minLeadHours: WHOLESALE_MIN_LEAD_HOURS,
+    maxDaysAhead: WHOLESALE_MAX_DAYS_AHEAD,
+    firstHour: PICKUP_FIRST_HOUR,
+    lastHour: PICKUP_LAST_HOUR,
+    minQtyPerItem: WHOLESALE_MIN_QTY_PER_ITEM,
+    discountTiers: WHOLESALE_DISCOUNT_TIERS,
+    maxTotalDiscount: WHOLESALE_MAX_TOTAL_DISCOUNT,
+  });
+});
+
+// ---- Оптове замовлення: оформлюється НАПЕРЕД на конкретну дату й час
+// самовивозу, одним запитом зі списком позицій (кошик не
+// використовується — оптовик набирає десятки позицій у таблиці, а не
+// докладає по одній штуці). На відміну від роздрібного замовлення:
+//   • лише для акаунтів customer_type = 'wholesale';
+//   • без адреси доставки — самовивіз (fulfillment_type = 'pickup');
+//   • склад не списується й залишок не перевіряється: замовлення
+//     готується під вказаний час, а не береться з наявного на полиці.
+router.post("/api/orders/wholesale", requireAuth, (req, res) => {
+  if (req.currentUser.customer_type !== "wholesale") {
+    return res.status(403).json({ ok: false, error: "Оптові замовлення доступні лише оптовим покупцям" });
+  }
+
+  const { items, pickupAt, contactPhone, comment } = req.body || {};
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.json({ ok: false, error: "Додайте до замовлення хоча б один товар" });
+  }
+
+  // Об'єднуємо дублікати productId й перевіряємо кількості.
+  const quantities = new Map();
+  for (const raw of items) {
+    const productId = Number(raw && raw.productId);
+    const quantity = Number(raw && raw.quantity);
+    if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity < 1 || quantity > 100000) {
+      return res.json({ ok: false, error: "Некоректна кількість у замовленні" });
+    }
+    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+  }
+
+  const tooFew = [...quantities.values()].some((q) => q < WHOLESALE_MIN_QTY_PER_ITEM);
+  if (tooFew) {
+    return res.json({
+      ok: false,
+      error: `Мінімальна кількість кожного товару в оптовому замовленні — ${WHOLESALE_MIN_QTY_PER_ITEM} шт.`,
+    });
+  }
+
+  const pickupTimestamp = Number(pickupAt);
+  const now = Date.now();
+  const minPickup = now + WHOLESALE_MIN_LEAD_HOURS * 60 * 60 * 1000;
+  const maxPickup = now + WHOLESALE_MAX_DAYS_AHEAD * 24 * 60 * 60 * 1000;
+  if (!Number.isFinite(pickupTimestamp) || pickupTimestamp < minPickup) {
+    return res.json({
+      ok: false,
+      error: `Самовивіз можливий не раніше ніж через ${WHOLESALE_MIN_LEAD_HOURS} год після оформлення`,
+    });
+  }
+  if (pickupTimestamp > maxPickup) {
+    return res.json({ ok: false, error: `Замовляти можна не далі ніж на ${WHOLESALE_MAX_DAYS_AHEAD} днів наперед` });
+  }
+
+  const phone =
+    typeof contactPhone === "string" && contactPhone.trim() ? contactPhone.trim() : req.currentUser.phone;
+  if (!/^\+?\d{9,13}$/.test(phone.replace(/[\s()-]/g, ""))) {
+    return res.json({ ok: false, error: "Вкажіть коректний номер телефону" });
+  }
+
+  const commentText = typeof comment === "string" ? comment.trim().slice(0, 500) : "";
+
+  const placeholders = [...quantities.keys()].map(() => "?").join(",");
+  const products = db
+    .prepare(`SELECT id, name, price, discount_percent FROM products WHERE id IN (${placeholders})`)
+    .all(...quantities.keys());
+  if (products.length !== quantities.size) {
+    return res.json({ ok: false, error: "Одного з товарів більше немає в каталозі — оновіть сторінку" });
+  }
+
+  const totalPieces = [...quantities.values()].reduce((a, b) => a + b, 0);
+  const volumePercent = wholesaleVolumePercent(totalPieces);
+
+  const subtotal =
+    Math.round(products.reduce((sum, p) => sum + discountedPrice(p) * quantities.get(p.id), 0) * 100) / 100;
+  const totalAmount =
+    Math.round(products.reduce((sum, p) => sum + wholesaleUnitPrice(p, volumePercent) * quantities.get(p.id), 0) * 100) /
+    100;
+
+  let orderId;
+  try {
+    db.exec("BEGIN");
+
+    const orderResult = db
+      .prepare(
+        `INSERT INTO orders (user_id, payment_method_id, status, total_amount, delivery_address, contact_phone,
+                             fulfillment_type, pickup_at, comment, created_at)
+         VALUES (?, NULL, 'pending', ?, 'Самовивіз', ?, 'pickup', ?, ?, ?)`
+      )
+      .run(req.currentUser.id, totalAmount, phone, Math.round(pickupTimestamp), commentText || null, now);
+    orderId = orderResult.lastInsertRowid;
+
+    const insertItem = db.prepare(
+      "INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)"
+    );
+    for (const p of products) {
+      insertItem.run(orderId, p.id, quantities.get(p.id), wholesaleUnitPrice(p, volumePercent));
+    }
+
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    console.error("Не вдалось оформити оптове замовлення:", err);
+    return res.json({ ok: false, error: "Не вдалось оформити замовлення, спробуйте ще раз" });
+  }
+
+  const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(orderId);
+  res.json({ ok: true, order: toOrder(order), volumeDiscountPercent: volumePercent, subtotal });
+});
+
 // ==============================
 // Адмінка
 // ==============================
@@ -167,10 +305,14 @@ function toAdminOrder(row) {
     userId: row.user_id,
     userFullName: row.user_full_name,
     userEmail: row.user_email,
+    customerType: row.user_customer_type === "wholesale" ? "wholesale" : "retail",
     status: row.status,
     totalAmount: row.total_amount,
     deliveryAddress: row.delivery_address,
     contactPhone: row.contact_phone,
+    fulfillmentType: row.fulfillment_type || "delivery",
+    pickupAt: row.pickup_at ?? null,
+    comment: row.comment ?? null,
     createdAt: row.created_at,
     itemsCount: row.items_count,
     items: getOrderItems(row.id),
@@ -240,7 +382,7 @@ router.get("/api/admin/orders/notifications", requireAdmin, (req, res) => {
 router.get("/api/admin/orders", requireAdmin, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT o.*, u.full_name AS user_full_name, u.email AS user_email,
+      `SELECT o.*, u.full_name AS user_full_name, u.email AS user_email, u.customer_type AS user_customer_type,
               (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS items_count
        FROM orders o
        JOIN users u ON u.id = o.user_id
@@ -268,7 +410,7 @@ router.patch("/api/admin/orders/:id", requireAdmin, (req, res) => {
   db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
   const row = db
     .prepare(
-      `SELECT o.*, u.full_name AS user_full_name, u.email AS user_email,
+      `SELECT o.*, u.full_name AS user_full_name, u.email AS user_email, u.customer_type AS user_customer_type,
               (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS items_count
        FROM orders o
        JOIN users u ON u.id = o.user_id

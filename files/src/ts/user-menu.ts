@@ -226,7 +226,11 @@ export function userMenuHtml(session: SessionUser): string {
         </div>${customerItems}
         ${
           isAdmin
-            ? `<button class="user-menu__item user-menu__item--notif" id="user-menu-notif-btn" type="button">
+            ? `<button class="user-menu__item user-menu__item--analytics" id="user-menu-analytics-btn" type="button">
+          <span class="user-menu__icon user-menu__icon--analytics" aria-hidden="true"></span>
+          Аналітика
+        </button>
+        <button class="user-menu__item user-menu__item--notif" id="user-menu-notif-btn" type="button">
           <span class="user-menu__icon user-menu__icon--notif" aria-hidden="true"></span>
           Сповіщення про замовлення
           <span class="admin-notif-badge" id="admin-notif-mobile-badge"></span>
@@ -265,6 +269,18 @@ export function setupUserMenu(): void {
     document.body.classList.remove("has-open-user-menu");
   };
   closeFn = close;
+
+  // Пункт "Аналітика" в меню адміна (мобільна адаптація, де бічного меню
+  // адмінки немає). На admin.html це просто перехід за hash, а якщо адмін
+  // відкрив меню на іншій сторінці — повноцінний перехід в адмінку.
+  document.getElementById("user-menu-analytics-btn")?.addEventListener("click", () => {
+    close();
+    if (window.location.pathname.endsWith("admin.html")) {
+      window.location.hash = "#/analytics";
+    } else {
+      window.location.href = "admin.html#/analytics";
+    }
+  });
 
   const toggle = (): void => {
     const isOpen = menu.classList.toggle("user-menu--open");
@@ -781,7 +797,11 @@ function orderCardHtml(order: ApiOrder): string {
           .join("")}
       </ul>
       <div class="my-order-card__footer">
-        <span>Адреса: ${escapeHtmlLocal(order.deliveryAddress)}</span>
+        <span>${
+          order.fulfillmentType === "pickup" && order.pickupAt
+            ? `Самовивіз: ${escapeHtmlLocal(new Date(order.pickupAt).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }))}`
+            : `Адреса: ${escapeHtmlLocal(order.deliveryAddress)}`
+        }</span>
         <span class="my-order-card__total">${Math.round(order.totalAmount)} ${WISHLIST_CURRENCY}</span>
       </div>
     </li>`;

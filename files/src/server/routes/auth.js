@@ -12,11 +12,12 @@ const {
   COOKIE_OPTS,
 } = require("../session");
 const { PAYMENT_METHOD_DEFAULT_LABEL } = require("../paymentMethods");
+const { assignDefaultTags } = require("../defaultTags");
 
 const router = express.Router();
 
 router.post("/api/register", (req, res) => {
-  const { fullName, email, phone, password } = req.body || {};
+  const { fullName, email, phone, password, isWholesale } = req.body || {};
 
   if (typeof fullName !== "string" || fullName.trim().length < 2) {
     return res.json({ ok: false, error: "Введіть ім'я та прізвище" });
@@ -40,9 +41,18 @@ router.post("/api/register", (req, res) => {
   const id = `u_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
   const trimmedName = fullName.trim();
 
+  // Чекбокс "Ви оптовий покупець?" у формі реєстрації. Приймаємо лише
+  // справжній true — решта (відсутнє поле, рядок "false" тощо) означає
+  // звичайного покупця.
+  const customerType = isWholesale === true ? "wholesale" : "retail";
+
   db.prepare(
-    "INSERT INTO users (id, full_name, email, phone, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(id, trimmedName, normalizedEmail, phone.trim(), hashPassword(password), Date.now());
+    "INSERT INTO users (id, full_name, email, phone, password_hash, customer_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(id, trimmedName, normalizedEmail, phone.trim(), hashPassword(password), customerType, Date.now());
+
+  // Новому користувачу одразу ставимо найпопулярніші теги як бажані —
+  // щоб рекомендації працювали вже з першого візиту, ще без історії.
+  assignDefaultTags(id);
 
   // Кожному новому покупцю одразу заводимо "Готівка кур'єру" основним
   // способом оплати — щоб на чекауті завжди було чим розрахуватись,
@@ -55,7 +65,10 @@ router.post("/api/register", (req, res) => {
 
   const token = createSession(id);
   res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
-  res.json({ ok: true, user: { id, fullName: trimmedName, email: normalizedEmail, phone: phone.trim(), role: "customer" } });
+  res.json({
+    ok: true,
+    user: { id, fullName: trimmedName, email: normalizedEmail, phone: phone.trim(), role: "customer", customerType },
+  });
 });
 
 router.post("/api/login", (req, res) => {

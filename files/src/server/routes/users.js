@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/api/admin/users", requireAdmin, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.created_at,
+      `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.customer_type, u.created_at,
               COUNT(o.id) AS order_count, COALESCE(SUM(o.total_amount), 0) AS total_spent
        FROM users u
        LEFT JOIN orders o ON o.user_id = u.id
@@ -27,6 +27,7 @@ router.get("/api/admin/users", requireAdmin, (req, res) => {
       email: r.email,
       phone: r.phone,
       role: r.role,
+      customerType: r.customer_type === "wholesale" ? "wholesale" : "retail",
       createdAt: r.created_at,
       orderCount: r.order_count,
       totalSpent: r.total_spent,

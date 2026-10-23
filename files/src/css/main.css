@@ -201,8 +201,22 @@
     width: 240px;
     flex-shrink: 0;
     padding: var(--space-5) var(--space-3);
-    border-right: 1px solid var(--color-border);
+    /* "Примагнічений" сайдбар — як каталог на головній: лишається під
+       шапкою (76px — її висота), поки гортається вміст. Якщо пунктів
+       більше, ніж влізає на екран, меню гортається саме. Роздільна
+       лінія тепер на .admin-main (див. нижче): сайдбар вже не
+       розтягується на всю висоту сторінки, тож лінія на ньому
+       обривалась би разом із ним. */
+    position: sticky;
+    top: 76px;
+    align-self: flex-start;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+  }
+
+  .admin-main {
     align-self: stretch;
+    border-left: 1px solid var(--color-border);
   }
 }
 
@@ -1120,6 +1134,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Імʼя + бейдж "ОПТ" в одному рядку: імʼя стискається з "…", бейдж — ніколи. */
+.admin-table__user-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-table__user-line .admin-table__user-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.admin-table__user-line .admin-wholesale-badge {
+  flex-shrink: 0;
+  margin-left: 0;
+  vertical-align: baseline;
 }
 
 .admin-table__subtext {
@@ -2699,12 +2732,43 @@ body.has-open-user-menu .mobile-search {
    лише на ПЕРШІЙ клітинці рядка (:first-child), інакше box-shadow на
    кожній td рядка малює вертикальну лінію на межі МІЖ КОЖНОЮ парою
    колонок — виглядає як частокол розділювачів через увесь рядок. */
+/* Оптові замовлення: м'який зелений фон + зелена смужка зліва. Блок стоїть
+   ПЕРЕД "pending", тож для оптового замовлення, що чекає обробки, фон лишається
+   бурштиновим (його не можна пропустити), а смужка — зеленою (видно, що це опт). */
+.admin-table__row--wholesale td {
+  background: #f1f6ea;
+}
+
+.admin-wholesale-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #5f7a4f;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+
 .admin-table__row--pending td {
   background: #fff8ec;
 }
 
 .admin-table__row--pending td:first-child {
   box-shadow: inset 3px 0 0 0 #e0932e;
+}
+
+.admin-table__row--wholesale td:first-child {
+  box-shadow: inset 4px 0 0 0 #5f7a4f;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-table tbody tr.admin-table__row--wholesale:hover td {
+    background: #e7f0dc;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2742,6 +2806,35 @@ body.has-open-user-menu .mobile-search {
   display: none;
 }
 
+/* "Аналітика" в меню адміна: показуємо там, де немає бічного меню
+   адмінки (воно з'являється від 901px). */
+.user-menu__item--analytics {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .user-menu__item--analytics {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+}
+
+.user-menu__icon--analytics {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-image: url(../../assets/icons/admin-analytics.png);
+  mask-image: url(../../assets/icons/admin-analytics.png);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
 @media (max-width: 640px) {
   .user-menu__item--notif {
     display: flex;
@@ -2771,4 +2864,22 @@ body.has-open-user-menu .mobile-search {
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+}
+
+/* ---- Перехід оптовика на сторінку оптових замовлень (шапка index.html) ---- */
+#auth-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wholesale-link {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .wholesale-link {
+    padding: 0 var(--space-3);
+    font-size: var(--fs-xs);
+  }
 }

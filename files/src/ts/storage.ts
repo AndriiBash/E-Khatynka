@@ -35,6 +35,7 @@ export interface RegisterInput {
   email: string;
   phone: string;
   password: string;
+  isWholesale?: boolean;
 }
 
 export type AuthResult =

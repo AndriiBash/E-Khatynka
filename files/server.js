@@ -42,6 +42,7 @@ app.get("/index.html", (req, res) => res.sendFile(path.join(__dirname, "index.ht
 app.get("/404.html", (req, res) => res.sendFile(path.join(__dirname, "404.html")));
 app.get("/product.html", (req, res) => res.sendFile(path.join(__dirname, "product.html")));
 app.get("/admin.html", (req, res) => res.sendFile(path.join(__dirname, "admin.html")));
+app.get("/wholesale.html", (req, res) => res.sendFile(path.join(__dirname, "wholesale.html")));
 app.use("/dist", express.static(path.join(__dirname, "dist")));
 app.use("/src/css", express.static(path.join(__dirname, "src", "css")));
 app.use("/assets", express.static(path.join(__dirname, "assets")));

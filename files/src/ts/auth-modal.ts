@@ -130,6 +130,10 @@ function initLoginForm(): void {
       showFormMessage("modal-login-message", "", false);
       form.reset();
       closeAuthModal();
+      if (result.user.role !== "admin" && result.user.customerType === "wholesale") {
+        window.location.href = "wholesale.html";
+        return;
+      }
       onAuthSuccess?.();
     })();
   });
@@ -177,6 +181,7 @@ function initRegisterForm(): void {
       const password = (document.getElementById("modal-register-password") as HTMLInputElement).value;
       const passwordConfirm = (document.getElementById("modal-register-passwordConfirm") as HTMLInputElement).value;
       const agree = (document.getElementById("modal-register-agree") as HTMLInputElement).checked;
+      const isWholesale = (document.getElementById("modal-register-wholesale") as HTMLInputElement).checked;
 
       clearErrors([
         "modal-register-fullName",
@@ -223,6 +228,7 @@ function initRegisterForm(): void {
         email,
         phone: phone.replace(/\s/g, ""),
         password,
+        isWholesale,
       });
 
       if (submitBtn) submitBtn.disabled = false;
@@ -235,6 +241,11 @@ function initRegisterForm(): void {
       showFormMessage("modal-register-message", "", false);
       form.reset();
       closeAuthModal();
+      // Оптовика одразу ведемо на його сторінку замовлень.
+      if (result.user.customerType === "wholesale") {
+        window.location.href = "wholesale.html";
+        return;
+      }
       onAuthSuccess?.();
     })();
   });

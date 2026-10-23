@@ -258,8 +258,8 @@ function patchRowInPlace(oldRow: HTMLTableRowElement, newRow: HTMLTableRowElemen
 // ==============================
 // Роутинг усередині сторінки:
 //   #/table/<key> — таблиця з ADMIN_TABLES (плитки на головній)
-//   #/analytics, #/settings — розділи з бічного меню, яких немає
-//     серед сирих таблиць БД (не прив'язані до жодної конкретної)
+//   #/analytics — розділ із бічного меню, якого немає серед сирих
+//     таблиць БД (не прив'язаний до жодної конкретної)
 //   порожньо (чи будь-що інше) — головна (плитки)
 // Справжніх переходів між сторінками нема, тож і "назад" у браузері
 // працює природно.
@@ -267,7 +267,6 @@ function patchRowInPlace(oldRow: HTMLTableRowElement, newRow: HTMLTableRowElemen
 
 const VIRTUAL_ROUTES: Record<string, string> = {
   "#/analytics": "Аналітика",
-  "#/settings": "Налаштування",
 };
 
 // Який пункт бічного меню (data-nav) відповідає поточному hash —
@@ -399,8 +398,8 @@ async function renderHome(): Promise<void> {
 
 // ==============================
 // Заглушка для ще не підключених розділів (і сирих таблиць БД, і
-// пунктів бічного меню на кшталт "Аналітика"/"Налаштування", які
-// взагалі не прив'язані до жодної окремої таблиці).
+// пунктів бічного меню, які взагалі не прив'язані до жодної окремої
+// таблиці).
 // ==============================
 
 function renderStub(label: string): void {
@@ -3185,11 +3184,22 @@ const ordersTable = createSimpleAdminTable<ApiAdminOrder>({
       options: ORDER_STATUS_OPTIONS.map((status) => ({ value: status, label: orderStatusLabel(status) })),
       matches: (o, v) => o.status === v,
     },
+    {
+      id: "customerType",
+      allLabel: "Усі покупці",
+      options: [
+        { value: "wholesale", label: "Оптові" },
+        { value: "retail", label: "Роздрібні" },
+      ],
+      matches: (o, v) => o.customerType === v,
+    },
   ],
   rowHtml: (o, isActive) => `
-    <tr class="${isActive ? "admin-table__row--active" : ""}${o.status === "pending" ? " admin-table__row--pending" : ""}" data-row-id="${o.id}">
+    <tr class="${isActive ? "admin-table__row--active" : ""}${o.status === "pending" ? " admin-table__row--pending" : ""}${o.customerType === "wholesale" ? " admin-table__row--wholesale" : ""}" data-row-id="${o.id}">
       <td class="admin-table__user-cell" title="${escapeHtml(o.userFullName)}">
-        <span class="admin-table__user-name">${escapeHtml(o.userFullName)}</span>
+        <span class="admin-table__user-line">
+          <span class="admin-table__user-name">${escapeHtml(o.userFullName)}</span>${o.customerType === "wholesale" ? `<span class="admin-wholesale-badge">Опт</span>` : ""}
+        </span>
         <span class="admin-table__subtext">${escapeHtml(o.userEmail)}</span>
       </td>
       <td class="admin-table__description-cell">${o.itemsCount}</td>
@@ -3219,13 +3229,18 @@ const ordersTable = createSimpleAdminTable<ApiAdminOrder>({
         <h2 class="admin-preview__name">Замовлення №${o.id}</h2>
       </div>
     </div>
-    ${previewFieldHtml("email", "Покупець", `${escapeHtml(o.userFullName)} (${escapeHtml(o.userEmail)})`)}
+    ${previewFieldHtml("email", "Покупець", `${escapeHtml(o.userFullName)} (${escapeHtml(o.userEmail)})${o.customerType === "wholesale" ? ` <span class="admin-wholesale-badge">Опт</span>` : ""}`)}
     ${previewFieldHtml("wallet", "Сума", formatCurrency(o.totalAmount))}
     <div class="admin-preview__field">
       <span class="admin-preview__field-label">Статус</span>
       <p class="admin-preview__field-value">${orderStatusBadgeHtml(o.status)}</p>
     </div>
-    ${previewFieldHtml("tag", "Адреса доставки", escapeHtml(o.deliveryAddress))}
+    ${
+      o.fulfillmentType === "pickup" && o.pickupAt
+        ? previewFieldHtml("calendar", "Самовивіз (опт)", formatDateTime(o.pickupAt))
+        : previewFieldHtml("tag", "Адреса доставки", escapeHtml(o.deliveryAddress))
+    }
+    ${o.comment ? previewFieldHtml("tag", "Коментар", escapeHtml(o.comment)) : ""}
     ${previewFieldHtml("phone", "Телефон", escapeHtml(o.contactPhone))}
     ${previewFieldHtml("calendar", "Створено", formatDateTime(o.createdAt))}
     <div class="admin-preview__field">

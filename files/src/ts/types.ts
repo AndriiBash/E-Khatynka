@@ -8,6 +8,7 @@ export interface SessionUser {
   email: string;
   phone: string;
   role: string;
+  customerType: "retail" | "wholesale";
 }
 
 export interface ApiCategory {
@@ -40,6 +41,7 @@ export interface ApiAdminUser {
   email: string;
   phone: string;
   role: string;
+  customerType: "retail" | "wholesale";
   createdAt: number;
   orderCount: number;
   totalSpent: number;
@@ -200,6 +202,11 @@ export interface ApiOrder {
   totalAmount: number;
   deliveryAddress: string;
   contactPhone: string;
+  /** "delivery" — звичайна доставка, "pickup" — самовивіз (оптові). */
+  fulfillmentType: "delivery" | "pickup";
+  /** Час самовивозу (мс), лише для fulfillmentType = "pickup". */
+  pickupAt: number | null;
+  comment: string | null;
   createdAt: number;
   items: ApiOrderItem[];
 }
@@ -208,6 +215,7 @@ export interface ApiAdminOrder extends ApiOrder {
   userId: string;
   userFullName: string;
   userEmail: string;
+  customerType: "retail" | "wholesale";
   itemsCount: number;
 }
 

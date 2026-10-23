@@ -131,10 +131,6 @@
           Аналітика
         </a>
 
-        <a class="admin-sidebar__link" href="#/settings" data-nav="settings">
-          <span class="admin-sidebar__icon admin-sidebar__icon--settings" aria-hidden="true"></span>
-          Налаштування
-        </a>
       </nav>
 
       <main class="admin-main">
@@ -175,6 +171,21 @@
       <p class="site-footer__thesis">Кваліфікаційна робота магістра Ізбаш А.В., група 366</p>
     </div>
   </footer>
+
+  <!-- Прогноз по одному товару: клік по рядку в Аналітика → Прогноз по товарах -->
+  <div class="auth-modal" id="an-forecast-modal" aria-hidden="true">
+    <div class="auth-modal__backdrop"></div>
+    <div class="auth-modal__dialog an-modal" role="dialog" aria-modal="true" aria-labelledby="an-forecast-modal-title">
+      <button class="auth-modal__close" id="an-forecast-modal-close" type="button" aria-label="Закрити">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <h2 id="an-forecast-modal-title"></h2>
+      <p class="an-modal__sub" id="an-forecast-modal-sub"></p>
+      <div id="an-forecast-modal-body"></div>
+    </div>
+  </div>
 
   <div class="auth-modal" id="admin-category-modal" aria-hidden="true">
     <div class="auth-modal__backdrop"></div>

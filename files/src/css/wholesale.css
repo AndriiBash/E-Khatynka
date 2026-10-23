@@ -1,0 +1,1212 @@
+/* ==============================
+   Сторінка оптового замовлення (wholesale.html)
+   Палітра й типографіка — спільні з магазином (tokens.css); тут лише
+   розкладка таблиці замовлення й панелі самовивозу.
+   ============================== */
+
+.ws {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-7);
+}
+
+.ws-status {
+  color: var(--color-text-muted);
+}
+
+.ws-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.ws-title {
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+}
+
+.ws-lead {
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+  color: var(--color-text-muted);
+}
+
+.ws-link {
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-accent-dark);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ws-link:hover {
+    text-decoration: underline;
+  }
+}
+
+.ws-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* ---- Список товарів ---- */
+
+.ws-list {
+  min-width: 0;
+}
+
+.ws-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.ws-search {
+  position: relative;
+}
+
+.ws-search svg {
+  position: absolute;
+  left: var(--space-4);
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.ws-search input {
+  width: 100%;
+  height: 46px;
+  padding: 0 var(--space-4) 0 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  color: var(--color-text);
+}
+
+.ws-search input:focus {
+  border-color: var(--color-accent);
+}
+
+.ws-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.ws-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-chip {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ws-chip.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.ws-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.ws-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.ws-toggle__count {
+  color: var(--color-text-muted);
+}
+
+.ws-table {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.ws-table__head,
+.ws-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 196px 100px;
+  align-items: center;
+  column-gap: var(--space-4);
+  padding: 0 var(--space-4);
+}
+
+.ws-table__head {
+  height: 44px;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.ws-table__head span:nth-child(2),
+.ws-table__head span:nth-child(3),
+.ws-table__head span:nth-child(4),
+.ws-price,
+.ws-sum {
+  text-align: right;
+}
+
+.ws-row {
+  min-height: 72px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.12s ease;
+}
+
+.ws-row:last-child {
+  border-bottom: none;
+}
+
+.ws-row.is-active {
+  background: #FFF7E8;
+}
+
+.ws-product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ws-thumb {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: 1.5rem;
+  overflow: hidden;
+}
+
+.ws-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ws-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ws-name__title {
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.ws-name__meta {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.ws-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-weight: 600;
+}
+
+.ws-price__old {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.ws-qty {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ws-step {
+  flex-shrink: 0;
+  width: 36px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-text);
+}
+
+.ws-step--quick {
+  width: 44px;
+  font-size: var(--fs-xs);
+  background: var(--color-surface-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ws-step:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent-dark);
+  }
+}
+
+.ws-qty__input {
+  width: 56px;
+  height: 40px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.ws-qty__input:focus {
+  border-color: var(--color-accent);
+}
+
+.ws-row.is-active .ws-qty__input {
+  border-color: var(--color-accent);
+}
+
+.ws-sum {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* ---- Панель самовивозу й підсумок ---- */
+
+.ws-summary {
+  position: sticky;
+  top: calc(76px + var(--space-4));
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.ws-summary__title {
+  font-size: var(--fs-lg);
+}
+
+.ws-summary__note {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.ws-summary__note strong {
+  color: var(--color-text);
+}
+
+.ws-totals {
+  margin: var(--space-4) 0 var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.ws-totals > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.ws-totals dt,
+.ws-totals dd {
+  margin: 0;
+}
+
+.ws-totals__grand {
+  margin-top: var(--space-2);
+  font-size: var(--fs-md) !important;
+  font-weight: 700;
+  color: var(--color-text) !important;
+}
+
+.btn--primary:disabled {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.ws-totals > div[hidden] {
+  display: none;
+}
+
+.ws-totals__discount {
+  color: var(--color-success) !important;
+  font-weight: 600;
+}
+
+.ws-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.ws-hint[hidden] {
+  display: none;
+}
+
+/* ---- Правила опту: мінімум і сходинки знижки ---- */
+
+.ws-rules {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+.ws-rules__min {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.ws-rules__tiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ws-tier {
+  padding: 4px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ws-tier b {
+  color: var(--color-accent-dark);
+}
+
+.ws-tier.is-reached {
+  border-style: solid;
+  border-color: var(--color-secondary);
+  background: var(--color-success-bg);
+  color: var(--color-secondary-dark);
+}
+
+.ws-tier.is-reached b {
+  color: var(--color-secondary-dark);
+}
+
+/* Рядок із кількістю меншою за мінімум */
+.ws-row.is-invalid {
+  background: var(--color-error-bg);
+}
+
+.ws-row.is-invalid .ws-qty__input {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.ws-sum {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.ws-sum__warn {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.ws-sum__warn[hidden],
+.ws-price__old[hidden] {
+  display: none;
+}
+
+/* ---- Підказка про наступну знижку ---- */
+
+.ws-promo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #FFF7E8;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--color-text);
+}
+
+.ws-promo__bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.ws-promo__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 0.25s ease;
+}
+
+/* ---- Календар вибору дня ---- */
+
+.cal {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.cal__title {
+  font-weight: 700;
+  font-size: var(--fs-base);
+}
+
+.cal__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.cal__nav svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cal__nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cal__nav:not(:disabled):hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent-dark);
+  }
+}
+
+.cal__weekdays,
+.cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cal__weekdays {
+  margin-bottom: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.cal__cell--empty {
+  aspect-ratio: 1;
+}
+
+.cal__day {
+  aspect-ratio: 1;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cal__day:disabled {
+  color: var(--color-border);
+  font-weight: 400;
+  cursor: not-allowed;
+}
+
+.cal__day.is-today:not(.is-selected) {
+  border-color: var(--color-accent);
+}
+
+.cal__day.is-selected {
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(201, 131, 46, 0.35);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cal__day:not(:disabled):not(.is-selected):hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+/* ---- Слоти часу ---- */
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.slots__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+}
+
+.slot {
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.slot.is-selected {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .slot:not(.is-selected):hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent-dark);
+  }
+}
+
+/* ---- Нижня панель на мобілці ---- */
+
+.ws-bar {
+  display: none;
+}
+
+/* ---- Екран "замовлення прийнято" / "лише для оптових" ---- */
+
+.ws-done {
+  max-width: 560px;
+  margin: var(--space-6) auto 0;
+}
+
+.ws-done__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.ws-done .ws-lead {
+  color: var(--color-text);
+}
+
+/* ---- Вікно оформлення (самовивіз + контакти) ---- */
+
+.ws-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.ws-modal[hidden] {
+  display: none;
+}
+
+.ws-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 29, 20, 0.45);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ws-modal.is-open .ws-modal__backdrop {
+  opacity: 1;
+}
+
+.ws-modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 780px;
+  max-height: min(92vh, 760px);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 24px 60px rgba(43, 29, 20, 0.28);
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ws-modal__panel.is-dragging {
+  transition: none;
+}
+
+.ws-modal.is-open .ws-modal__panel {
+  opacity: 1;
+  transform: none;
+}
+
+.ws-modal__handle {
+  display: none;
+}
+
+.ws-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.ws-modal__title {
+  font-size: var(--fs-lg);
+}
+
+.ws-modal__note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.ws-modal__note strong {
+  color: var(--color-text);
+}
+
+.ws-modal__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.ws-modal__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ws-modal__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 var(--space-5);
+  padding: var(--space-2) var(--space-5) var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ws-modal__col {
+  min-width: 0;
+}
+
+.ws-modal__col .field:last-child {
+  margin-bottom: var(--space-2);
+}
+
+.ws-modal__body textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.ws-modal__foot {
+  padding: var(--space-3) var(--space-5) var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.ws-modal__foot .form-message {
+  margin: 0 0 var(--space-3);
+}
+
+.ws-modal__foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.ws-modal__sum {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.ws-modal__sum-label {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.ws-modal__sum-total {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.ws-modal__confirm {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 200px;
+  padding: 0 var(--space-6);
+}
+
+/* Мобілка: вікно стає шторкою знизу, поля йдуть в одну колонку */
+@media (max-width: 720px) {
+  .ws-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .ws-modal__panel {
+    max-width: none;
+    max-height: 92vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transform: translateY(100%);
+    opacity: 1;
+    transition: transform 0.25s ease;
+  }
+
+  .ws-modal__handle {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 2px;
+    touch-action: none;
+  }
+
+  .ws-modal__handle span {
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--color-border);
+  }
+
+  .ws-modal__head {
+    padding: var(--space-3) var(--space-4) var(--space-2);
+  }
+
+  .ws-modal__body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-2) var(--space-4);
+  }
+
+  .ws-modal__foot {
+    padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ws-modal__confirm {
+    min-width: 0;
+    padding: 0 var(--space-5);
+  }
+}
+
+/* ---- Екран "Замовлення прийнято" ---- */
+
+.ws-ticket {
+  max-width: 600px;
+  margin: var(--space-5) auto 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.ws-ticket__hero {
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  text-align: center;
+  background: linear-gradient(180deg, var(--color-success-bg) 0%, var(--color-surface) 100%);
+}
+
+.ws-ticket__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-3);
+  border-radius: 50%;
+  background: var(--color-secondary);
+  color: #fff;
+  box-shadow: 0 0 0 8px rgba(95, 122, 79, 0.16);
+  animation: ws-pop 0.4s ease both;
+}
+
+.ws-ticket__check svg {
+  width: 32px;
+  height: 32px;
+}
+
+@keyframes ws-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ws-ticket__title {
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+}
+
+.ws-ticket__sub {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+}
+
+.ws-ticket__facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.ws-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.ws-fact--total {
+  grid-column: 1 / -1;
+  background: #FFF7E8;
+  border: 1px solid var(--color-accent);
+}
+
+.ws-fact__label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.ws-fact__value {
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.ws-fact--total .ws-fact__value {
+  font-size: var(--fs-lg);
+}
+
+.ws-fact__save {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-secondary-dark);
+}
+
+.ws-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.ws-steps__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.ws-steps__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: var(--fs-xs);
+}
+
+.ws-steps__item.is-done {
+  color: var(--color-secondary-dark);
+  font-weight: 600;
+}
+
+.ws-steps__item.is-done .ws-steps__dot {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary);
+  color: #fff;
+}
+
+.ws-ticket__details {
+  margin: 0 var(--space-5);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.ws-ticket__details summary {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.ws-ticket__list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-ticket__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  padding: 6px 0;
+  font-size: var(--fs-sm);
+}
+
+.ws-ticket__item-qty {
+  color: var(--color-text-muted);
+}
+
+.ws-ticket__item-sum {
+  min-width: 72px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.ws-ticket__note {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.ws-ticket .ws-done__actions {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+@media (max-width: 480px) {
+  .ws-ticket__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .ws-ticket .ws-done__actions {
+    flex-direction: column;
+  }
+}
+
+/* ---- Планшет і мобілка ---- */
+
+@media (max-width: 960px) {
+  .ws {
+    padding: var(--space-5) var(--space-4) 112px;
+  }
+
+  .ws-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ws-summary {
+    position: static;
+  }
+
+  .ws-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: 0 -6px 16px rgba(43, 29, 20, 0.08);
+  }
+
+  .ws-bar[hidden] {
+    display: none;
+  }
+
+  .ws-bar__info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  .ws-bar__count {
+    font-size: var(--fs-xs);
+    color: var(--color-text-muted);
+  }
+
+  .ws-bar__total {
+    font-size: var(--fs-md);
+    font-weight: 700;
+  }
+
+  .ws-bar .btn {
+    height: 44px;
+    padding: 0 var(--space-6);
+  }
+}
+
+@media (max-width: 720px) {
+  .ws-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ws-table__head {
+    display: none;
+  }
+
+  .ws-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "product product"
+      "price qty"
+      "sum qty";
+    row-gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .ws-product {
+    grid-area: product;
+  }
+
+  .ws-price {
+    grid-area: price;
+    align-self: end;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    text-align: left;
+  }
+
+  .ws-qty {
+    grid-area: qty;
+  }
+
+  .ws-sum {
+    grid-area: sum;
+    align-self: start;
+    align-items: flex-start;
+    text-align: left;
+    font-size: var(--fs-sm);
+    color: var(--color-text-muted);
+  }
+
+  .ws-step {
+    width: 40px;
+    height: 44px;
+  }
+
+  .ws-step--quick {
+    width: 48px;
+  }
+
+  .ws-qty__input {
+    width: 52px;
+    height: 44px;
+    /* 16px+ — інакше iOS Safari наближає сторінку при фокусі на полі. */
+    font-size: 1rem;
+  }
+}

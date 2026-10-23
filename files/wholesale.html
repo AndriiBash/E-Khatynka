@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>Оптове замовлення – Є-Хатинка</title>
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
+  <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/auth.css" />
+  <link rel="stylesheet" href="src/css/main.css" />
+  <link rel="stylesheet" href="src/css/wholesale.css" />
+</head>
+<body>
+  <div class="stub">
+    <header class="stub__topbar">
+      <a class="brand" href="index.html">
+        <img class="brand__icon" src="assets/icons/logo-house.png" alt="" onerror="this.remove()" />
+        <span class="brand__text">
+          <span class="brand__name"><span class="logo-accent">Є-</span>Хатинка<span class="logo-accent">.</span></span>
+          <span class="brand__tagline">Оптові замовлення</span>
+        </span>
+      </a>
+      <div class="stub__topbar-spacer"></div>
+      <div id="auth-slot"></div>
+    </header>
+
+    <main class="stub__body ws" id="ws-root">
+      <p class="ws-status">Завантажуємо каталог…</p>
+    </main>
+  </div>
+
+  <script type="module" src="dist/js/wholesale.js"></script>
+</body>
+</html>

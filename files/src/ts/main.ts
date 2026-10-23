@@ -361,7 +361,13 @@ async function render(): Promise<void> {
       greeting.textContent = `Вітаємо, ${firstName}!`;
     }
 
-    slot.innerHTML = userMenuHtml(session);
+    // Оптовик бачить у шапці швидкий перехід на сторінку оптових
+    // замовлень (звичайний каталог при цьому теж доступний).
+    const wholesaleLink =
+      session.customerType === "wholesale"
+        ? `<a class="btn btn--primary-sm wholesale-link" href="wholesale.html">Оптове замовлення</a>`
+        : "";
+    slot.innerHTML = wholesaleLink + userMenuHtml(session);
 
     document.getElementById("logout-btn")?.addEventListener("click", () => {
       // Чекаємо, поки /api/logout справді очистить сесію на сервері —

@@ -11,6 +11,7 @@
 
 import { getAnalyticsReport, applyProductDiscount } from "./storage.js";
 import { confirmDelete } from "./admin.js";
+import { lockScroll, unlockScroll } from "./scroll-lock.js";
 import type {
   ApiAnalyticsReport,
   ApiDiscountRow,
@@ -159,6 +160,83 @@ function sparklineSvg(recent: number[], fc: number[]): string {
   return `<svg class="an-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline class="an-spark__hist" points="${histPts}" fill="none" /><polyline class="an-spark__fc" points="${fcPts}" fill="none" /></svg>`;
 }
 
+// Діаграма по одному товару (у модалці): фактичні продажі за останні дні
+// й прогноз на наступні. Над стовпчиками прогнозу — значення.
+function productChartSvg(f: ApiForecastRow, r: ApiAnalyticsReport): string {
+  const hist = f.recent;
+  const fc = f.forecast;
+  const values = [...hist, ...fc];
+  if (!values.length) return `<div class="an-empty">Немає даних для графіка.</div>`;
+
+  // Дати фактичних днів — це останні дні спільного вікна історії.
+  const histDates = r.historyDates.slice(Math.max(0, r.historyDates.length - hist.length));
+  const fcDates = r.dates.map((d) => d.iso);
+
+  const W = 560;
+  const H = 230;
+  const padL = 30;
+  const padR = 14;
+  const padT = 26;
+  const padB = 30;
+  const top = niceMax(Math.max(...values, 1));
+  const plotH = H - padT - padB;
+
+  // Стовпчики прогнозу в 1.5 раза ширші за фактичні: їх лише кілька, а
+  // над кожним стоїть підпис значення й під ним — день тижня.
+  const FC_WIDTH = 1.5;
+  const unit = (W - padL - padR) / (hist.length + fc.length * FC_WIDTH);
+  const slotOf = (i: number): { x: number; w: number } =>
+    i < hist.length
+      ? { x: padL + i * unit, w: unit }
+      : { x: padL + hist.length * unit + (i - hist.length) * unit * FC_WIDTH, w: unit * FC_WIDTH };
+
+  const grid = [0, 0.5, 1]
+    .map((k) => {
+      const y = H - padB - k * plotH;
+      return `<line class="an-grid" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" /><text class="an-axis" x="${padL - 6}" y="${y + 4}" text-anchor="end">${fmt(top * k, 0)}</text>`;
+    })
+    .join("");
+
+  const bars = values
+    .map((v, i) => {
+      const isForecast = i >= hist.length;
+      const { x, w } = slotOf(i);
+      const h = (v / top) * plotH;
+      const y = H - padB - h;
+      const iso = isForecast ? fcDates[i - hist.length] : histDates[i];
+      const title = iso
+        ? `${dateLabel(iso)} (${weekdayOfIso(iso)}): ${fmt(v, 1)} шт.${isForecast ? " — прогноз" : ""}`
+        : `${fmt(v, 1)} шт.`;
+      const rect = `<rect class="an-bar ${isForecast ? "an-bar--fc" : "an-bar--hist"}" x="${(x + 1).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, w - 2).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2"><title>${title}</title></rect>`;
+      const label = isForecast
+        ? `<text class="an-val" x="${(x + w / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle">${fmt(v, 1)}</text>`
+        : "";
+      return rect + label;
+    })
+    .join("");
+
+  const xLabels = values
+    .map((_, i) => {
+      const isForecast = i >= hist.length;
+      const { x, w } = slotOf(i);
+      const cx = (x + w / 2).toFixed(1);
+      if (isForecast) {
+        const iso = fcDates[i - hist.length];
+        return iso ? `<text class="an-axis an-axis--accent" x="${cx}" y="${H - 10}" text-anchor="middle">${weekdayOfIso(iso)}</text>` : "";
+      }
+      if (i % 7 !== 0 || !histDates[i]) return "";
+      return `<text class="an-axis" x="${cx}" y="${H - 10}" text-anchor="middle">${dateLabel(histDates[i])}</text>`;
+    })
+    .join("");
+
+  const sepX = padL + hist.length * unit;
+  const separator = hist.length
+    ? `<line class="an-sep" x1="${sepX}" x2="${sepX}" y1="${padT - 6}" y2="${H - padB}" /><text class="an-axis an-axis--accent" x="${sepX - 4}" y="${padT - 10}" text-anchor="end">← факт</text><text class="an-axis an-axis--accent" x="${sepX + 4}" y="${padT - 10}">прогноз →</text>`
+    : "";
+
+  return `<svg class="an-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Продажі товару: факт і прогноз" preserveAspectRatio="xMidYMid meet">${grid}${bars}${xLabels}${separator}</svg>`;
+}
+
 // ---------- Бейджі
 
 function confidenceBadge(c: ForecastConfidence): string {
@@ -251,7 +329,7 @@ function ensembleWeightsHtml(f: ApiForecastRow): string {
 
 function forecastRowHtml(f: ApiForecastRow): string {
   const tomorrow = f.forecast[0] ?? 0;
-  return `<tr>
+  return `<tr class="an-row-click" data-forecast-product="${f.productId}" tabindex="0" title="Показати діаграму продажів і прогноз на ${f.forecast.length} днів">
     <td class="an-cell-name">${esc(f.name)}<span class="an-sub">${esc(f.categoryName)}</span></td>
     <td class="an-num">${fmt(tomorrow, 1)}</td>
     <td class="an-num">${fmt(f.forecastWeek, 1)}</td>
@@ -282,7 +360,7 @@ function forecastTabHtml(r: ApiAnalyticsReport): string {
     </section>
     <section class="an-panel">
       <div class="an-panel__head">
-        <h2 class="admin-section__title">Прогноз по товарах</h2>
+        <h2 class="admin-section__title">Прогноз по товарах <span class="an-hint-inline">— натисніть на товар, щоб побачити діаграму</span></h2>
         <input class="admin-table-search an-search" id="an-forecast-search" type="search" placeholder="Пошук товару" value="${esc(forecastQuery)}" autocomplete="off" />
       </div>
       ${noSales ? `<p class="admin-section__hint an-hint">Без продажів: ${noSales} — не показано.</p>` : ""}
@@ -482,7 +560,70 @@ function showMessage(text: string, isError = false): void {
   el.classList.toggle("an-message--visible", text.length > 0);
 }
 
+// ---------- Модалка «Прогноз по товару»
+
+let forecastModalReady = false;
+
+function onForecastModalKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") closeForecastModal();
+}
+
+function closeForecastModal(): void {
+  const modal = document.getElementById("an-forecast-modal");
+  if (!modal || !modal.classList.contains("auth-modal--open")) return;
+  modal.classList.remove("auth-modal--open");
+  modal.setAttribute("aria-hidden", "true");
+  document.removeEventListener("keydown", onForecastModalKeydown);
+  window.setTimeout(() => {
+    unlockScroll();
+  }, 200);
+}
+
+function openForecastModal(productId: number): void {
+  const f = report?.forecast.find((row) => row.productId === productId);
+  const modal = document.getElementById("an-forecast-modal");
+  const title = document.getElementById("an-forecast-modal-title");
+  const sub = document.getElementById("an-forecast-modal-sub");
+  const body = document.getElementById("an-forecast-modal-body");
+  if (!f || !report || !modal || !title || !sub || !body) return;
+
+  const avgFact = f.recent.length ? sum(f.recent) / f.recent.length : 0;
+  title.textContent = f.name;
+  sub.textContent = `${f.categoryName} · прогноз продажів на ${f.forecast.length} днів`;
+  body.innerHTML = `
+    <div class="an-tiles">
+      <div class="an-tile"><span class="an-tile__value">${fmt(f.forecast[0] ?? 0, 1)}</span><span class="an-tile__label">Завтра, шт.</span></div>
+      <div class="an-tile"><span class="an-tile__value">${fmt(f.forecastWeek, 1)}</span><span class="an-tile__label">За ${f.forecast.length} днів, шт.</span></div>
+      <div class="an-tile"><span class="an-tile__value">${fmt(avgFact, 1)}</span><span class="an-tile__label">У середньому за добу (факт)</span></div>
+      <div class="an-tile"><span class="an-tile__value">${fmt(f.stock, 0)}</span><span class="an-tile__label">Залишок, шт.</span></div>
+    </div>
+    <div class="an-legend an-modal__legend"><span class="an-legend__dot an-legend__dot--hist"></span>факт, ${f.recent.length} дн.<span class="an-legend__dot an-legend__dot--fc"></span>прогноз</div>
+    <div class="an-chart-wrap">${productChartSvg(f, report)}</div>
+    <p class="an-modal__meta">
+      Модель: ${f.modelName ? esc(f.modelName) : "—"}
+      <span class="an-modal__sep">WAPE ${fmtPercent(f.wape)}</span>
+      <span class="an-modal__sep">Довіра: ${confidenceBadge(f.confidence)}</span>
+    </p>`;
+
+  modal.classList.add("auth-modal--open");
+  modal.setAttribute("aria-hidden", "false");
+  lockScroll();
+  document.addEventListener("keydown", onForecastModalKeydown);
+}
+
+// Модалка статична в admin.html — слухачі вішаємо один раз, інакше
+// після кожного «Оновити» вони б дублювались.
+function setupForecastModal(): void {
+  if (forecastModalReady) return;
+  const modal = document.getElementById("an-forecast-modal");
+  if (!modal) return;
+  forecastModalReady = true;
+  document.getElementById("an-forecast-modal-close")?.addEventListener("click", closeForecastModal);
+  modal.querySelector(".auth-modal__backdrop")?.addEventListener("click", closeForecastModal);
+}
+
 function bindShell(): void {
+  setupForecastModal();
   document.getElementById("an-back-btn")?.addEventListener("click", () => {
     window.location.hash = "";
   });
@@ -501,6 +642,12 @@ function bindShell(): void {
   const content = document.getElementById("an-content");
   content?.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
+
+    const forecastRow = target.closest<HTMLElement>("[data-forecast-product]");
+    if (forecastRow) {
+      openForecastModal(Number(forecastRow.dataset.forecastProduct));
+      return;
+    }
 
     const dayBtn = target.closest<HTMLElement>("[data-plan-day]");
     if (dayBtn) {
@@ -536,6 +683,14 @@ function bindShell(): void {
         if (confirmed) void onApplyDiscount(productId, 0);
       })();
     }
+  });
+
+  content?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>("[data-forecast-product]");
+    if (!row || e.target !== row) return;
+    e.preventDefault();
+    openForecastModal(Number(row.dataset.forecastProduct));
   });
 
   content?.addEventListener("input", (e) => {

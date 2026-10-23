@@ -202,23 +202,44 @@
 }
 
 .field--checkbox {
+  /* Галочка стоїть рівно по центру ПЕРШОГО рядка тексту — і в однорядкових
+     підписах, і в багаторядкових ("Ви оптовий покупець?" з підказкою,
+     "Погоджуюсь з умовами…"). Висота рядка задана явно, щоб відступ
+     галочки можна було порахувати точно. */
+  --check-size: 18px;
+  --check-line: calc(var(--fs-sm) * 1.5);
+  /* Оптична поправка: у системних шрифтів (SF на macOS/iOS) чорнило тексту
+     сидить у рядку нижче за геометричний центр — без неї галочка
+     виглядає трохи вище за текст. Виміряно по скріншоту: ~2px. */
+  --check-nudge: 2px;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: flex-start;
+  gap: var(--space-3);
 }
 
 .field--checkbox label {
   font-weight: 400;
   font-size: var(--fs-sm);
+  line-height: 1.5;
   margin: 0;
+  cursor: pointer;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--color-text-muted);
 }
 
 .field--checkbox input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  width: var(--check-size);
+  height: var(--check-size);
+  margin: calc((var(--check-line) - var(--check-size)) / 2 + var(--check-nudge)) 0 0;
   flex-shrink: 0;
   accent-color: var(--color-accent);
+  cursor: pointer;
 }
 
 /* ---- Тайли вибору способу оплати (попап "Способи оплати", user-menu.ts) ----
